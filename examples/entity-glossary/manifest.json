@@ -1,0 +1,85 @@
+{
+  "id": "entity-glossary",
+  "name": "Entity Glossary",
+  "displayName": "Entity Glossary",
+  "version": "0.1.0",
+  "author": "VS Write Team",
+  "publisher": "vswrite",
+  "description": "Generate a Markdown glossary from project entities.",
+  "categories": [
+    "Tools",
+    "Writing"
+  ],
+  "keywords": [
+    "entities",
+    "glossary",
+    "export"
+  ],
+  "license": "MIT",
+  "permissions": {
+    "entityApi": {
+      "read": true
+    }
+  },
+  "tools": [
+    {
+      "name": "entity_glossary",
+      "description": "Build a Markdown glossary from entities",
+      "category": "custom",
+      "icon": "BookOpen",
+      "pythonModule": "./tools.py",
+      "pythonFunction": "entity_glossary",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional list of entity types to include"
+          },
+          "include_aliases": {
+            "type": "boolean",
+            "description": "Whether to include aliases in the output",
+            "default": false
+          }
+        },
+        "required": []
+      },
+      "examples": [
+        "Build a glossary of all entities",
+        "Generate a glossary for facts and rules"
+      ],
+      "documentation": "Returns a Markdown glossary grouped by entity type."
+    },
+    {
+      "name": "entity_relationships",
+      "description": "List sections that reference a specific entity",
+      "category": "custom",
+      "icon": "ListChecks",
+      "pythonModule": "./tools.py",
+      "pythonFunction": "entity_relationships",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "Entity ID to inspect"
+          }
+        },
+        "required": [
+          "entity_id"
+        ]
+      },
+      "examples": [
+        "Show me where entity 123 appears",
+        "List sections referencing this fact"
+      ],
+      "documentation": "Returns a Markdown summary of sections linked to the entity."
+    }
+  ],
+  "signature": "uKfmJ9y1/apBQKsucieHY9cNwq3mfun/kLizZVZGamgXCOs73aXKRNhKmGuuBtxHpvJcN9SLIZa16OBlZVfCDw==",
+  "signatureAlgorithm": "ed25519",
+  "publicKeyId": "vswrite-official"
+}

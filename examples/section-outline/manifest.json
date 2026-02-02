@@ -1,0 +1,54 @@
+{
+  "id": "section-outline",
+  "name": "Section Outline",
+  "displayName": "Section Outline",
+  "version": "0.1.0",
+  "author": "VS Write Team",
+  "publisher": "vswrite",
+  "description": "Generate an outline from section files.",
+  "categories": [
+    "Tools",
+    "Writing"
+  ],
+  "keywords": [
+    "sections",
+    "outline",
+    "markdown"
+  ],
+  "license": "MIT",
+  "permissions": {
+    "tools": [
+      "read_file",
+      "glob"
+    ],
+    "filesystem": "project"
+  },
+  "tools": [
+    {
+      "name": "section_outline",
+      "description": "Build a simple outline from section files",
+      "category": "custom",
+      "icon": "ListOrdered",
+      "pythonModule": "./tools.py",
+      "pythonFunction": "section_outline",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Glob pattern for sections",
+            "default": "sections/*.md"
+          }
+        },
+        "required": []
+      },
+      "examples": [
+        "Build a section outline"
+      ],
+      "documentation": "Reads section frontmatter to list titles in order."
+    }
+  ],
+  "signature": "yL3/uh6Ehh54RhX/hNUexuCuuUyyG7EKWZfoLDatG4939Y6WF/mBsEbF08OcDMVk54puEA9VYFX3BBZKNzaIDg==",
+  "signatureAlgorithm": "ed25519",
+  "publicKeyId": "vswrite-official"
+}

@@ -1,0 +1,47 @@
+{
+  "id": "my-extension",
+  "name": "My Extension",
+  "version": "1.0.0",
+  "description": "A starter template for VS Write Lua extensions",
+  "author": "Your Name",
+  "permissions": ["file_read", "file_write", "entity_read", "entity_write"],
+  "tools": [
+    {
+      "name": "my_tool",
+      "description": "A sample tool that demonstrates the extension API",
+      "luaScript": "./tools.lua",
+      "luaFunction": "my_tool",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "A message to process"
+          },
+          "option": {
+            "type": "string",
+            "enum": ["option1", "option2", "option3"],
+            "description": "An optional setting"
+          }
+        },
+        "required": ["message"]
+      }
+    },
+    {
+      "name": "list_project_info",
+      "description": "Get an overview of the project (entities and sections)",
+      "luaScript": "./tools.lua",
+      "luaFunction": "list_project_info",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  ],
+  "lifecycle": {
+    "onActivate": true,
+    "onDeactivate": true,
+    "onProjectOpen": true
+  }
+}

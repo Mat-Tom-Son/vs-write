@@ -1,0 +1,55 @@
+{
+  "id": "entity-glossary-lua",
+  "name": "Entity Glossary (Lua)",
+  "version": "1.0.0",
+  "description": "Generate formatted glossaries from your project entities using Lua",
+  "tools": [
+    {
+      "name": "generate_glossary",
+      "description": "Generate a markdown glossary from all entities in the project",
+      "luaScript": "glossary.lua",
+      "luaFunction": "generate_glossary",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "description": "Output format: 'markdown' or 'plain'",
+            "default": "markdown"
+          },
+          "sort": {
+            "type": "string",
+            "description": "Sort order: 'alpha' or 'type'",
+            "default": "alpha"
+          }
+        }
+      }
+    },
+    {
+      "name": "count_entities",
+      "description": "Count entities by type",
+      "luaScript": "glossary.lua",
+      "luaFunction": "count_entities",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "find_entity",
+      "description": "Find an entity by name",
+      "luaScript": "glossary.lua",
+      "luaFunction": "find_entity",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Entity name to search for"
+          }
+        },
+        "required": ["name"]
+      }
+    }
+  ]
+}

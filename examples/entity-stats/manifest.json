@@ -1,0 +1,46 @@
+{
+  "id": "entity-stats",
+  "name": "Entity Stats",
+  "displayName": "Entity Stats",
+  "version": "0.1.0",
+  "author": "VS Write Team",
+  "publisher": "vswrite",
+  "description": "Summarize entity counts by type.",
+  "categories": [
+    "Tools",
+    "Writing"
+  ],
+  "keywords": [
+    "entities",
+    "stats",
+    "summary"
+  ],
+  "license": "MIT",
+  "permissions": {
+    "entityApi": {
+      "read": true
+    }
+  },
+  "tools": [
+    {
+      "name": "entity_stats",
+      "description": "Summarize entity counts by type",
+      "category": "custom",
+      "icon": "BarChart3",
+      "pythonModule": "./tools.py",
+      "pythonFunction": "entity_stats",
+      "schema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "examples": [
+        "Show entity counts by type"
+      ],
+      "documentation": "Returns a simple count breakdown of entity types."
+    }
+  ],
+  "signature": "nZT1F0JRe4yUldtYNtRsYP957W82Z1ghz2sGGki6XQ7A0ws3fN2y1O8xt0eYdSk7OEtsS8AfLoi6XtTpGgWhCg==",
+  "signatureAlgorithm": "ed25519",
+  "publicKeyId": "vswrite-official"
+}

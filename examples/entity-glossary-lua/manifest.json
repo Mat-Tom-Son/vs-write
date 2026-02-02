@@ -1,0 +1,51 @@
+{
+  "id": "entity-glossary-lua",
+  "name": "Entity Glossary (Lua)",
+  "version": "1.0.0",
+  "description": "Generate glossaries and relationship maps from project entities",
+  "author": "VS Write Team",
+  "permissions": ["file_read", "entity_read"],
+  "tools": [
+    {
+      "name": "entity_glossary",
+      "description": "Generate a formatted glossary of all entities in the project, grouped by type",
+      "luaScript": "./tools.lua",
+      "luaFunction": "entity_glossary",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "description": "Filter by entity type (e.g., 'fact', 'rule', 'concept', 'relationship', 'event'). If not specified, includes all types."
+          },
+          "format": {
+            "type": "string",
+            "enum": ["markdown", "plain", "json"],
+            "description": "Output format. Defaults to 'markdown'."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "entity_relationships",
+      "description": "Show relationships between entities and the sections they appear in",
+      "luaScript": "./tools.lua",
+      "luaFunction": "entity_relationships",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "Specific entity ID to show relationships for. If not specified, shows all relationships."
+          },
+          "include_sections": {
+            "type": "boolean",
+            "description": "Include section appearances in the output. Defaults to true."
+          }
+        },
+        "required": []
+      }
+    }
+  ]
+}

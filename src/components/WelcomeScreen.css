@@ -1,0 +1,136 @@
+.welcome-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: var(--bg-primary, #1b1e24);
+  color: var(--text-primary, #e5e5e5);
+}
+
+.welcome-content {
+  max-width: 600px;
+  padding: 40px;
+  text-align: center;
+}
+
+.welcome-content h1 {
+  font-size: 48px;
+  font-weight: 300;
+  margin: 0 0 8px 0;
+  color: var(--text-primary, #e5e5e5);
+}
+
+.welcome-content .subtitle {
+  font-size: 16px;
+  color: var(--text-secondary, #999);
+  margin: 0 0 40px 0;
+}
+
+.welcome-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-bottom: 48px;
+}
+
+.primary-button,
+.secondary-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-family: inherit;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.primary-button {
+  background: var(--accent, #007acc);
+  color: white;
+}
+
+.primary-button:hover {
+  background: var(--accent-hover, #005a9e);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
+}
+
+.secondary-button {
+  background: var(--bg-secondary, #2a2a2a);
+  color: var(--text-primary, #e5e5e5);
+  border: 1px solid var(--border, #333);
+}
+
+.secondary-button:hover {
+  background: var(--bg-hover, #333);
+  border-color: var(--border-hover, #444);
+  transform: translateY(-1px);
+}
+
+.welcome-info,
+.welcome-shortcuts {
+  margin-top: 32px;
+  text-align: left;
+}
+
+.welcome-info h3,
+.welcome-shortcuts h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: var(--text-secondary, #999);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.welcome-info ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.welcome-info li {
+  padding: 8px 0;
+  color: var(--text-secondary, #999);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.welcome-info li::before {
+  content: "•";
+  color: var(--accent, #007acc);
+  font-weight: bold;
+  display: inline-block;
+  width: 16px;
+}
+
+.shortcut-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.shortcut-list > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.shortcut-list kbd {
+  background: var(--bg-secondary, #2a2a2a);
+  border: 1px solid var(--border, #333);
+  border-radius: 3px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-family: 'Courier New', monospace;
+  min-width: 60px;
+  text-align: center;
+}
+
+.shortcut-list span {
+  font-size: 13px;
+  color: var(--text-secondary, #999);
+}

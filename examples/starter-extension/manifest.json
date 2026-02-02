@@ -1,0 +1,80 @@
+{
+  "id": "starter-extension",
+  "name": "Starter Extension",
+  "displayName": "Starter Extension",
+  "version": "0.1.0",
+  "author": "VS Write Team",
+  "publisher": "vswrite",
+  "description": "Template extension demonstrating entity API usage and tags.",
+  "categories": ["Tools", "Template"],
+  "keywords": ["template", "starter", "entities"],
+  "license": "MIT",
+  "permissions": {
+    "entityApi": {
+      "read": true,
+      "tags": true
+    },
+    "settings": true
+  },
+  "tools": [
+    {
+      "name": "list_entities",
+      "description": "List entities by type",
+      "category": "custom",
+      "icon": "List",
+      "pythonModule": "./tools.py",
+      "pythonFunction": "list_entities",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Entity type (character, location, concept, item, rule, custom)"
+          }
+        },
+        "required": ["type"]
+      },
+      "examples": [
+        "List character entities"
+      ],
+      "documentation": "Returns a simple list of entity names for the chosen type."
+    },
+    {
+      "name": "tag_range",
+      "description": "Tag a range in a section with an entity",
+      "category": "custom",
+      "icon": "Tag",
+      "pythonModule": "./tools.py",
+      "pythonFunction": "tag_range",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "section_id": { "type": "string" },
+          "entity_id": { "type": "string" },
+          "from": { "type": "integer" },
+          "to": { "type": "integer" }
+        },
+        "required": ["section_id", "entity_id", "from", "to"]
+      },
+      "examples": [
+        "Tag entity 123 in section 456 from 10 to 24"
+      ],
+      "documentation": "Adds a tag to the section and links the entity."
+    }
+  ],
+  "lifecycle": {
+    "onProjectOpen": true
+  },
+  "settings": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "logLevel": {
+          "type": "string",
+          "default": "info",
+          "enum": ["debug", "info", "warn", "error"]
+        }
+      }
+    }
+  }
+}

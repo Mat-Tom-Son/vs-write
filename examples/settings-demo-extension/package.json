@@ -1,0 +1,7 @@
+{
+  "name": "settings-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./extension.ts",
+  "description": "Demonstrates all extension settings types and features"
+}

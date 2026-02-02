@@ -1,0 +1,16 @@
+{
+  "name": "hello-extension",
+  "version": "1.0.0",
+  "description": "Simple test extension for VS Write extension system",
+  "type": "module",
+  "main": "extension.js",
+  "vswrite": {
+    "minVersion": "0.1.0"
+  },
+  "scripts": {
+    "build": "tsc extension.ts --module es2020 --target es2020 --moduleResolution node"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

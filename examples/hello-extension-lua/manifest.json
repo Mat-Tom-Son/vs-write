@@ -1,0 +1,46 @@
+{
+  "id": "hello-extension-lua",
+  "name": "Hello Extension (Lua)",
+  "version": "1.0.0",
+  "description": "A simple example extension demonstrating Lua tool implementation",
+  "author": "VS Write Team",
+  "permissions": ["file_read"],
+  "tools": [
+    {
+      "name": "say_hello",
+      "description": "Says hello to a person by name",
+      "luaScript": "./tools.lua",
+      "luaFunction": "say_hello",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the person to greet"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "count_files",
+      "description": "Counts files matching a glob pattern in the workspace",
+      "luaScript": "./tools.lua",
+      "luaFunction": "count_files",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Glob pattern to match files (e.g., '*.md', '**/*.lua')"
+          }
+        },
+        "required": []
+      }
+    }
+  ],
+  "lifecycle": {
+    "onActivate": true,
+    "onDeactivate": true
+  }
+}

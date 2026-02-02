@@ -1,0 +1,128 @@
+{
+  "id": "hello-extension",
+  "name": "Hello Extension",
+  "displayName": "Hello Extension",
+  "version": "1.0.0",
+  "author": "VS Write Team",
+  "publisher": "vswrite",
+  "description": "Simple test extension that adds custom agent tools for greeting and file counting",
+  "categories": [
+    "Tools",
+    "Demo"
+  ],
+  "keywords": [
+    "hello",
+    "example",
+    "demo",
+    "test"
+  ],
+  "license": "MIT",
+  "permissions": {
+    "tools": [
+      "read_file",
+      "glob"
+    ],
+    "filesystem": "project",
+    "settings": true,
+    "entityApi": {
+      "read": true
+    }
+  },
+  "tools": [
+    {
+      "name": "say_hello",
+      "description": "Say hello with an optional name parameter",
+      "category": "custom",
+      "icon": "Hand",
+      "pythonModule": "./tools.py",
+      "pythonFunction": "say_hello",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name to greet (optional)"
+          }
+        },
+        "required": []
+      },
+      "examples": [
+        "Say hello to Alice",
+        "Greet the user"
+      ],
+      "documentation": "Returns a greeting message. Optionally provide a name to personalize the greeting."
+    },
+    {
+      "name": "count_files",
+      "description": "Count files in the project matching a pattern",
+      "category": "custom",
+      "icon": "FileText",
+      "pythonModule": "./tools.py",
+      "pythonFunction": "count_files",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Glob pattern (e.g., \"*.md\", \"sections/*.txt\")"
+          }
+        },
+        "required": [
+          "pattern"
+        ]
+      },
+      "examples": [
+        "Count markdown files",
+        "How many text files are in sections/?"
+      ],
+      "documentation": "Uses the glob tool to count files matching a pattern."
+    }
+  ],
+  "lifecycle": {
+    "onActivate": true,
+    "onDeactivate": true,
+    "onProjectOpen": true,
+    "onProjectClose": true,
+    "onSectionSave": true,
+    "onSectionDelete": true,
+    "onEntityChange": true
+  },
+  "settings": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "greeting": {
+          "type": "string",
+          "default": "Hello",
+          "description": "The greeting word to use"
+        },
+        "showNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notifications for extension events"
+        },
+        "maxFiles": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Maximum number of files to count"
+        },
+        "logLevel": {
+          "type": "string",
+          "default": "info",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
+          "description": "Logging level for extension output"
+        }
+      }
+    }
+  },
+  "signature": "ScrCEQBjDlrOHc3jfEwlDh51TRRnLzd09X5xuUAc+T/Fd3lRtMTgd+mj3VnOhmjBjit1vKUcV3znw3PipcSHDA==",
+  "signatureAlgorithm": "ed25519",
+  "publicKeyId": "vswrite-official"
+}

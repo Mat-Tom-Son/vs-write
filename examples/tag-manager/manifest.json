@@ -1,0 +1,115 @@
+{
+  "id": "tag-manager",
+  "name": "Tag Manager",
+  "displayName": "Tag Manager",
+  "version": "0.1.0",
+  "author": "VS Write Team",
+  "publisher": "vswrite",
+  "description": "Quick tag helpers for entity ranges.",
+  "categories": [
+    "Tools",
+    "Writing"
+  ],
+  "keywords": [
+    "tags",
+    "entities",
+    "ranges"
+  ],
+  "license": "MIT",
+  "permissions": {
+    "entityApi": {
+      "read": true,
+      "tags": true
+    }
+  },
+  "tools": [
+    {
+      "name": "add_entity_tag",
+      "description": "Add a tag range for an entity in a section",
+      "category": "custom",
+      "icon": "Tag",
+      "pythonModule": "./tools.py",
+      "pythonFunction": "add_entity_tag",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "section_id": {
+            "type": "string"
+          },
+          "entity_id": {
+            "type": "string"
+          },
+          "from": {
+            "type": "integer"
+          },
+          "to": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "section_id",
+          "entity_id",
+          "from",
+          "to"
+        ]
+      },
+      "examples": [
+        "Tag entity 123 in section 456 from 10 to 42"
+      ],
+      "documentation": "Adds a tag and ensures the entity is linked to the section."
+    },
+    {
+      "name": "remove_entity_tag",
+      "description": "Remove a tag by ID from a section",
+      "category": "custom",
+      "icon": "TagOff",
+      "pythonModule": "./tools.py",
+      "pythonFunction": "remove_entity_tag",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "section_id": {
+            "type": "string"
+          },
+          "tag_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "section_id",
+          "tag_id"
+        ]
+      },
+      "examples": [
+        "Remove tag abc from section 456"
+      ],
+      "documentation": "Removes a tag and updates entity links if needed."
+    },
+    {
+      "name": "tag_overview",
+      "description": "Summarize tags for a section",
+      "category": "custom",
+      "icon": "List",
+      "pythonModule": "./tools.py",
+      "pythonFunction": "tag_overview",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "section_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "section_id"
+        ]
+      },
+      "examples": [
+        "Show tags for section 456"
+      ],
+      "documentation": "Returns a simple list of tag ranges and entity names."
+    }
+  ],
+  "signature": "ZJ7YGmuK07vqzPyfj+7+wo4Jz8clftWX7lNqRbNay+YwKCO4rrfR6xIHN5S9TqUi4VFPVlLXmhlmIZrGhPwZDQ==",
+  "signatureAlgorithm": "ed25519",
+  "publicKeyId": "vswrite-official"
+}
