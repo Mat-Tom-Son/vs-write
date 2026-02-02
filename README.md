@@ -81,10 +81,10 @@ Use cloud APIs or run models locally. Configure in Settings.
 
 | Provider | Use Case |
 |----------|----------|
-| OpenAI | GPT-4o, GPT-4 |
-| Anthropic Claude | Claude 3.5/4 |
-| OpenRouter | Access multiple providers |
-| Ollama | Local models, offline use |
+| OpenAI | Cloud API, also works with OpenAI-compatible servers (LM Studio, etc.) |
+| Anthropic | Claude models via cloud API |
+| OpenRouter | Single API for multiple model providers |
+| Ollama | Run open-source models locally, fully offline |
 
 ### Extend with Lua
 
