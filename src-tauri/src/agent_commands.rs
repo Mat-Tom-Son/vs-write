@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use crate::agent::credentials::{CredentialManager, ProviderStatus, SharedCredentialManager};
 use crate::agent::lua_extensions::{ExtensionRegistry, HookResult, LifecycleHook};
 use crate::agent::session::{Session, SharedSessionStore, AuditEntry};
-use crate::agent::{self, AgentConfig, AgentEvent, LlmProvider, Message, MessageRole};
+use crate::agent::{self, AgentConfig, AgentEvent, LlmProvider, Message, MessageRole, ToolApprovalStore};
 
 /// Protocol version for the native agent API
 pub const PROTOCOL_VERSION: &str = "1.1.0";
@@ -210,6 +210,7 @@ pub async fn run_native_agent(
     extensions: State<'_, SharedExtensionRegistry>,
     running_tasks: State<'_, RunningTasks>,
     session_store: State<'_, SharedSessionStore>,
+    tool_approvals: State<'_, ToolApprovalStore>,
     task: String,
     system_prompt: String,
     workspace: String,
@@ -329,6 +330,7 @@ pub async fn run_native_agent(
         agent_config,
         Some(tx),
         Some(ext_registry),
+        Some(tool_approvals.inner().clone()),
         Some(cancel_token),
     )
     .await;
@@ -387,6 +389,26 @@ pub async fn run_native_agent(
                 tool_call_count: 0,
             })
         }
+    }
+}
+
+/// Respond to a pending tool approval request.
+#[tauri::command]
+pub async fn respond_tool_approval(
+    tool_approvals: State<'_, ToolApprovalStore>,
+    approval_id: String,
+    approved: bool,
+) -> Result<(), String> {
+    let tx = {
+        let mut pending = tool_approvals.lock().await;
+        pending.remove(&approval_id)
+    };
+
+    match tx {
+        Some(sender) => sender
+            .send(approved)
+            .map_err(|_| "Approval request already resolved".to_string()),
+        None => Err("Unknown or expired approval_id".to_string()),
     }
 }
 
@@ -509,12 +531,14 @@ pub fn load_lua_extension(
         serde_json::from_str(&manifest_content)
             .map_err(|e| format!("Failed to parse manifest: {}", e))?;
 
+    let lua_tool_count = manifest.tools.iter().filter(|t| t.lua_script.is_some()).count();
+
     Ok(ExtensionInfo {
         id: manifest.id,
         name: manifest.name,
         version: manifest.version,
         description: manifest.description,
-        tool_count: manifest.tools.len(),
+        tool_count: lua_tool_count,
     })
 }
 

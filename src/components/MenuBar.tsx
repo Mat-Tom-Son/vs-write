@@ -1,44 +1,27 @@
 import { useState } from 'react';
-import { open } from '@tauri-apps/plugin-dialog';
+import { confirm as confirmDialog, message, open } from '@tauri-apps/plugin-dialog';
 import { useStoryStore } from '../lib/store';
-import { SettingsDialog } from './SettingsDialog';
+import { modifierKeyLabel } from '../lib/platform';
+import { formatError } from '../lib/errors';
 import './MenuBar.css';
 
-export function MenuBar() {
+export interface MenuBarProps {
+  onNewProject?: () => void;
+  onOpenSettings?: () => void;
+}
+
+export function MenuBar({ onNewProject, onOpenSettings }: MenuBarProps) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const modKey = modifierKeyLabel();
   const projectRoot = useStoryStore((s) => s.projectRoot);
   const isDirty = useStoryStore((s) => s.isDirty);
-  const createNewProject = useStoryStore((s) => s.createNewProject);
   const openProject = useStoryStore((s) => s.openProject);
   const saveProject = useStoryStore((s) => s.saveProject);
   const closeProject = useStoryStore((s) => s.closeProject);
 
   const handleNewProject = async () => {
     setActiveMenu(null);
-
-    const projectName = prompt('Enter project name:');
-    if (!projectName) return;
-
-    const folderPath = await open({
-      directory: true,
-      multiple: false,
-      title: 'Select parent folder for new project',
-    });
-
-    if (folderPath && typeof folderPath === 'string') {
-      // Normalize path separators for the platform
-      const separator = folderPath.includes('\\') ? '\\' : '/';
-      const projectSlug = projectName.toLowerCase().replace(/\s+/g, '-');
-      const projectPath = `${folderPath}${separator}${projectSlug}`;
-
-      try {
-        await createNewProject(projectPath, projectName);
-      } catch (error) {
-        console.error('Failed to create project:', error);
-        alert(`Failed to create project: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    }
+    onNewProject?.();
   };
 
   const handleOpenProject = async () => {
@@ -47,6 +30,7 @@ export function MenuBar() {
     const folderPath = await open({
       directory: true,
       multiple: false,
+      recursive: true,
       title: 'Open VS Write Project',
     });
 
@@ -55,7 +39,7 @@ export function MenuBar() {
         await openProject(folderPath);
       } catch (error) {
         console.error('Failed to open project:', error);
-        alert('Failed to open project. See console for details.');
+        await message(`Failed to open project: ${formatError(error)}`, { kind: 'error' });
       }
     }
   };
@@ -64,7 +48,7 @@ export function MenuBar() {
     setActiveMenu(null);
 
     if (!projectRoot) {
-      alert('No project open');
+      await message('No project open.', { kind: 'warning' });
       return;
     }
 
@@ -72,7 +56,7 @@ export function MenuBar() {
       await saveProject();
     } catch (error) {
       console.error('Failed to save project:', error);
-      alert('Failed to save project. See console for details.');
+      await message(`Failed to save project: ${formatError(error)}`, { kind: 'error' });
     }
   };
 
@@ -80,7 +64,11 @@ export function MenuBar() {
     setActiveMenu(null);
 
     if (isDirty) {
-      const shouldSave = confirm('Save changes before closing?');
+      const shouldSave = await confirmDialog('Save changes before closing?', {
+        kind: 'warning',
+        okLabel: 'Save',
+        cancelLabel: "Don't Save",
+      });
       if (shouldSave) {
         await handleSave();
       }
@@ -91,7 +79,8 @@ export function MenuBar() {
 
   const handleSettings = () => {
     setActiveMenu(null);
-    setSettingsOpen(true);
+    if (!projectRoot) return;
+    onOpenSettings?.();
   };
 
   const toggleMenu = (menu: string) => {
@@ -119,21 +108,21 @@ export function MenuBar() {
             <div className="menu-dropdown">
               <button onClick={handleNewProject}>
                 <span>New Project</span>
-                <span className="shortcut">Ctrl+N</span>
+                <span className="shortcut">{modKey}+N</span>
               </button>
               <button onClick={handleOpenProject}>
                 <span>Open Project</span>
-                <span className="shortcut">Ctrl+O</span>
+                <span className="shortcut">{modKey}+O</span>
               </button>
               <div className="menu-divider" />
               <button onClick={handleSave} disabled={!projectRoot}>
                 <span>Save</span>
-                <span className="shortcut">Ctrl+S</span>
+                <span className="shortcut">{modKey}+S</span>
               </button>
               <div className="menu-divider" />
               <button onClick={handleSettings} disabled={!projectRoot}>
                 <span>Settings</span>
-                <span className="shortcut">Ctrl+,</span>
+                <span className="shortcut">{modKey}+,</span>
               </button>
               <div className="menu-divider" />
               <button onClick={handleClose} disabled={!projectRoot}>
@@ -154,11 +143,11 @@ export function MenuBar() {
             <div className="menu-dropdown">
               <button disabled>
                 <span>Undo</span>
-                <span className="shortcut">Ctrl+Z</span>
+                <span className="shortcut">{modKey}+Z</span>
               </button>
               <button disabled>
                 <span>Redo</span>
-                <span className="shortcut">Ctrl+Y</span>
+                <span className="shortcut">{modKey}+Y</span>
               </button>
             </div>
           )}
@@ -175,7 +164,7 @@ export function MenuBar() {
             <div className="menu-dropdown">
               <button onClick={() => {
                 closeMenus();
-                alert('VS Write v0.1.0\n\nA folder-based writing environment.');
+                void message('VS Write v0.1.0\n\nA folder-based writing environment.');
               }}>
                 <span>About</span>
               </button>
@@ -183,7 +172,6 @@ export function MenuBar() {
           )}
         </div>
       </nav>
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </>
   );
 }

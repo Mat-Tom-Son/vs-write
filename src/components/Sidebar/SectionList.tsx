@@ -1,15 +1,14 @@
 import { useMemo, useState, useCallback } from 'react';
+import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog';
 import {
   DndContext,
   closestCenter,
   KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-  type DragOverEvent,
-  DragOverlay,
-} from '@dnd-kit/core';
+	  PointerSensor,
+	  useSensor,
+	  useSensors,
+	  type DragEndEvent,
+	} from '@dnd-kit/core';
 import {
   arrayMove,
   SortableContext,
@@ -241,9 +240,14 @@ function SortableItem({
         {/* Delete button */}
         <button
           className="delete-btn"
-          onClick={(e) => {
+          onClick={async (e) => {
             e.stopPropagation();
-            if (confirm(`Delete "${section.title}"?`)) deleteSection(section.id);
+            const confirmed = await confirmDialog(`Delete "${section.title}"?`, {
+              kind: 'warning',
+              okLabel: 'Delete',
+              cancelLabel: 'Cancel',
+            });
+            if (confirmed) deleteSection(section.id);
           }}
         >
           <X size={14} />

@@ -377,11 +377,11 @@ describe('ExtensionSettingsDialog', () => {
       expect(localStorageData[`extension_${extensionId}_optional`]).toBeUndefined();
     });
 
-    it('should clear errors after reset', () => {
-      let errors = { maxRetries: 'Must be at least 0' };
+	    it('should clear errors after reset', () => {
+	      let errors: Record<string, string> = { maxRetries: 'Must be at least 0' };
 
-      // Simulate reset
-      errors = {};
+	      // Simulate reset
+	      errors = {};
 
       expect(Object.keys(errors)).toHaveLength(0);
     });

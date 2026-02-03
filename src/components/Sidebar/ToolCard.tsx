@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Info } from 'lucide-react';
+import { ChevronDown, ChevronRight, Info, type LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import type { ToolDefinition } from '../../lib/tool-registry';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
@@ -12,7 +12,8 @@ export function ToolCard({ tool }: ToolCardProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   // Get the icon component from lucide-react
-  const IconComponent = (LucideIcons as Record<string, typeof LucideIcons.HelpCircle>)[tool.icon] || LucideIcons.HelpCircle;
+  const IconComponent =
+    (LucideIcons as unknown as Record<string, LucideIcon>)[tool.icon] ?? LucideIcons.HelpCircle;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>

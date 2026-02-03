@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { message } from '@tauri-apps/plugin-dialog';
 import type { Section, Diagnostic } from '../../lib/schemas';
 import { useStoryStore } from '../../lib/store';
 import { useAppSettings } from '../../lib/app-settings';
@@ -55,7 +56,7 @@ export function DiagnosticsPanel({ section }: Props) {
 
   const runConsistencyCheck = async () => {
     if (entities.length === 0) {
-      alert('Link at least one entity to this section to run consistency checks.');
+      await message('Link at least one entity to this section to run consistency checks.', { kind: 'warning' });
       return;
     }
 
@@ -73,7 +74,7 @@ export function DiagnosticsPanel({ section }: Props) {
       setLastChecked(new Date());
     } catch (err) {
       console.error('Consistency check failed:', err);
-      alert('Consistency check failed. Check console for details.');
+      await message('Consistency check failed. Check console for details.', { kind: 'error' });
     } finally {
       setIsChecking(false);
     }

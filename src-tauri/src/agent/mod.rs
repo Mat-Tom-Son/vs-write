@@ -16,4 +16,5 @@ pub mod types;
 
 // Re-export main types and functions for convenience
 pub use core::run_agent;
+pub use core::ToolApprovalStore;
 pub use types::{AgentConfig, AgentEvent, LlmProvider, Message, MessageRole};

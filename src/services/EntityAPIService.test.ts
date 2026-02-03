@@ -5,7 +5,7 @@ import { EntityAPIService } from './EntityAPIService';
 const makeEntity = (overrides: Partial<Entity> = {}): Entity => ({
   id: '11111111-1111-1111-1111-111111111111',
   name: 'Alice',
-  type: 'character',
+  type: 'custom',
   description: 'Primary character.',
   aliases: ['Al'],
   metadata: {},

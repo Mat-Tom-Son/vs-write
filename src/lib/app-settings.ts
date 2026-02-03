@@ -51,6 +51,7 @@ export interface AppSettings {
 export interface MaintenanceSettings {
   disableRipgrepFallback: boolean;
   extensionSafeMode: boolean;
+  toolApprovalMode: 'auto_approve' | 'approve_dangerous' | 'approve_writes' | 'approve_all' | 'dry_run';
 }
 
 interface AppSettingsState {
@@ -155,13 +156,14 @@ CAPABILITIES:
 - glob: Find files by pattern (e.g., "*.md", "chapters/*.txt")
 - grep: Search file contents for text
 - run_shell: Execute shell commands (git, file operations, etc.)
-- run_python: Run Python scripts for data processing or analysis
 
 FILE STRUCTURE:
 {{fileStructure}}
 
 RULES:
 - Work ONLY within the workspace root - never access external paths
+- Prefer built-in tools (read_file/list_dir/glob/grep) over run_shell whenever possible
+- If you must use run_shell, use POSIX-compatible commands (macOS/Linux) and avoid Windows-only commands
 - You already know the project structure above - use it to read files directly
 - Be respectful of existing content - confirm before overwriting
 - Summarize large outputs; don't overwhelm the user
@@ -178,6 +180,7 @@ RESPONSE STYLE:
   maintenance: {
     disableRipgrepFallback: false,
     extensionSafeMode: false,
+    toolApprovalMode: 'approve_dangerous',
   },
 });
 

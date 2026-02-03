@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Puzzle, CheckCircle, Download, Trash2, RefreshCw, FolderOpen } from 'lucide-react';
-import { open } from '@tauri-apps/plugin-dialog';
+import { confirm as confirmDialog, message, open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { NativeExtensionService, type LoadedExtension } from '../../services/NativeExtensionService';
+import { formatError } from '../../lib/errors';
 
 export function ExtensionsPanel() {
   const [extensions, setExtensions] = useState<LoadedExtension[]>([]);
@@ -18,7 +19,7 @@ export function ExtensionsPanel() {
       await NativeExtensionService.refreshLoadedExtensions();
       setExtensions(NativeExtensionService.getLoadedExtensions());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load extensions');
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }
@@ -59,10 +60,10 @@ export function ExtensionsPanel() {
       await NativeExtensionService.loadExtension(selected);
       await refreshExtensions();
 
-      alert('Extension loaded successfully!');
+      await message('Extension loaded successfully!', { kind: 'info' });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load extension');
-      alert(`Failed to load extension: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setError(formatError(err));
+      await message(`Failed to load extension: ${formatError(err)}`, { kind: 'error' });
     } finally {
       setLoading(false);
     }
@@ -70,7 +71,11 @@ export function ExtensionsPanel() {
 
   // Unload extension
   const handleUnloadExtension = async (extensionId: string) => {
-    const confirmed = confirm(`Are you sure you want to unload "${extensionId}"?`);
+    const confirmed = await confirmDialog(`Unload "${extensionId}"?`, {
+      kind: 'warning',
+      okLabel: 'Unload',
+      cancelLabel: 'Cancel',
+    });
     if (!confirmed) return;
 
     try {
@@ -78,7 +83,7 @@ export function ExtensionsPanel() {
       await NativeExtensionService.unloadExtension(extensionId);
       await refreshExtensions();
     } catch (err) {
-      alert(`Failed to unload extension: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      await message(`Failed to unload extension: ${formatError(err)}`, { kind: 'error' });
     } finally {
       setLoading(false);
     }
@@ -171,11 +176,13 @@ export function ExtensionsPanel() {
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <Puzzle size={16} />
-                    <span style={{ fontWeight: 600, fontSize: '14px' }}>{ext.name}</span>
-                    <CheckCircle size={14} style={{ color: '#4ade80' }} title="Active" />
-                  </div>
+	                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+	                    <Puzzle size={16} />
+	                    <span style={{ fontWeight: 600, fontSize: '14px' }}>{ext.name}</span>
+	                    <span title="Active">
+	                      <CheckCircle size={14} style={{ color: '#4ade80' }} />
+	                    </span>
+	                  </div>
                   <div style={{ fontSize: '12px', color: '#808080', marginBottom: '4px' }}>
                     v{ext.version} - {ext.toolCount} tool(s)
                   </div>
@@ -214,7 +221,7 @@ export function ExtensionsPanel() {
       {/* Footer */}
       <div style={{ padding: '8px', fontSize: '11px', color: '#606060', borderTop: '1px solid #333' }}>
         <p style={{ marginBottom: '8px' }}>
-          Lua extensions are loaded from folders containing a manifest.json file.
+          Lua extensions are loaded from folders containing a manifest.json file. Bundled Lua extensions are installed on startup.
         </p>
         {extensionsDir && (
           <button

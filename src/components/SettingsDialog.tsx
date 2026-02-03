@@ -74,6 +74,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   // Maintenance settings state
   const [disableRipgrepFallback, setDisableRipgrepFallback] = useState(false);
   const [extensionSafeMode, setExtensionSafeMode] = useState(false);
+  const [toolApprovalMode, setToolApprovalMode] = useState<
+    'auto_approve' | 'approve_dangerous' | 'approve_writes' | 'approve_all' | 'dry_run'
+  >('approve_dangerous');
 
   // Project override flags (not implemented yet, will always save to app settings)
   const [saveNarrativeAsProject, setSaveNarrativeAsProject] = useState(false);
@@ -115,6 +118,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     // Maintenance settings
     setDisableRipgrepFallback(appSettings.maintenance?.disableRipgrepFallback ?? false);
     setExtensionSafeMode(appSettings.maintenance?.extensionSafeMode ?? false);
+    setToolApprovalMode(appSettings.maintenance?.toolApprovalMode ?? 'approve_dangerous');
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [open, project.settings, appSettings, activeTab]);
 
@@ -139,6 +143,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
       updateMaintenanceSettings({
         disableRipgrepFallback,
         extensionSafeMode,
+        toolApprovalMode,
       });
     } else {
       // Save LLM and system prompt settings (automatically persisted to localStorage)
@@ -195,6 +200,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     setAgentSystemPrompt(appSettings.systemPrompts.agentSystemPrompt);
     setDisableRipgrepFallback(appSettings.maintenance?.disableRipgrepFallback ?? false);
     setExtensionSafeMode(appSettings.maintenance?.extensionSafeMode ?? false);
+    setToolApprovalMode(appSettings.maintenance?.toolApprovalMode ?? 'approve_dangerous');
 
     onOpenChange(false);
   };
@@ -774,6 +780,32 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                     <strong>Recommendation:</strong> Enable this setting (check the box) if you have a large project and haven't installed `ripgrep`.
                   </p>
                 </div>
+              </div>
+
+              <div className="border-t border-border my-4" />
+
+              {/* Tool Approval Mode */}
+              <div className="space-y-2">
+                <div className="space-y-0.5">
+                  <label htmlFor="tool-approval-mode" className="text-sm font-medium">
+                    Tool Approval Mode
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Controls when the AI must ask before executing tools (especially <code>run_shell</code> and <code>delete_file</code>).
+                  </p>
+                </div>
+                <select
+                  id="tool-approval-mode"
+                  value={toolApprovalMode}
+                  onChange={(e) => setToolApprovalMode(e.target.value as typeof toolApprovalMode)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="approve_dangerous">Approve dangerous tools (recommended)</option>
+                  <option value="approve_writes">Approve writes + dangerous tools</option>
+                  <option value="approve_all">Approve every tool call</option>
+                  <option value="auto_approve">Auto-approve (unsafe)</option>
+                  <option value="dry_run">Dry-run (never execute)</option>
+                </select>
               </div>
 
               <div className="border-t border-border my-4" />

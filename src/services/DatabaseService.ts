@@ -1,4 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
+import { mkdir } from '@tauri-apps/plugin-fs';
 import type { Entity, Section, Diagnostic, Tag } from '../lib/schemas';
 
 export interface ProjectYamlData {
@@ -55,7 +56,10 @@ export class DatabaseService {
    * @returns Initialized DatabaseService instance
    */
   static async create(projectRoot: string): Promise<DatabaseService> {
-    const dbPath = `${projectRoot}/.storyide/index.db`;
+    const normalizedRoot = projectRoot.replace(/\\/g, '/');
+    const dbDir = `${normalizedRoot}/.storyide`;
+    await mkdir(dbDir, { recursive: true });
+    const dbPath = `${dbDir}/index.db`;
     const db = await Database.load(`sqlite:${dbPath}`);
     const service = new DatabaseService(db);
     await service.initialize();

@@ -7,8 +7,8 @@ import {
   validateExtensionManifest,
   safeValidateExtensionManifest,
   ExtensionManifestSchema,
-  ToolDefinitionSchema,
-  ExtensionPermissionsSchema,
+  LuaToolDefinitionSchema,
+  LifecycleConfigSchema,
 } from './extension-schemas';
 
 describe('ExtensionManifestSchema', () => {
@@ -17,48 +17,26 @@ describe('ExtensionManifestSchema', () => {
       id: 'my-extension',
       name: 'My Extension',
       version: '1.0.0',
-      permissions: {},
     };
 
     const result = validateExtensionManifest(manifest);
     expect(result.id).toBe('my-extension');
     expect(result.name).toBe('My Extension');
     expect(result.version).toBe('1.0.0');
+    expect(result.tools).toEqual([]);
   });
 
-  it('should validate a complete manifest', () => {
+  it('should validate a manifest with optional fields', () => {
     const manifest = {
       id: 'word-count',
       name: 'Word Count',
-      displayName: 'Word Counter Pro',
       version: '1.2.3',
-      author: 'John Doe',
-      publisher: 'acme-corp',
       description: 'Count words in your project',
-      categories: ['Utilities'],
-      keywords: ['word', 'count', 'statistics'],
-      icon: './icon.png',
-      homepage: 'https://example.com',
-      repository: {
-        type: 'git',
-        url: 'https://github.com/user/repo',
-      },
-      bugs: 'https://github.com/user/repo/issues',
-      license: 'MIT',
-      permissions: {
-        tools: ['read_file', 'glob'],
-        filesystem: 'project',
-        settings: true,
-        entityApi: {
-          read: true,
-        },
-      },
+      permissions: ['read_file', 'glob'],
       tools: [
         {
           name: 'count_words',
           description: 'Count words in sections',
-          category: 'custom',
-          icon: 'calculator',
           pythonModule: './tools.py',
           pythonFunction: 'count_words',
           schema: {
@@ -87,7 +65,6 @@ describe('ExtensionManifestSchema', () => {
       id: 'MyExtension',
       name: 'My Extension',
       version: '1.0.0',
-      permissions: {},
     };
 
     const result = safeValidateExtensionManifest(manifest);
@@ -103,7 +80,6 @@ describe('ExtensionManifestSchema', () => {
       id: 'my extension',
       name: 'My Extension',
       version: '1.0.0',
-      permissions: {},
     };
 
     const result = safeValidateExtensionManifest(manifest);
@@ -119,7 +95,6 @@ describe('ExtensionManifestSchema', () => {
       id: 'my_extension',
       name: 'My Extension',
       version: '1.0.0',
-      permissions: {},
     };
 
     const result = safeValidateExtensionManifest(manifest);
@@ -134,7 +109,6 @@ describe('ExtensionManifestSchema', () => {
       id: 'my-extension-name',
       name: 'My Extension',
       version: '1.0.0',
-      permissions: {},
     };
 
     const result = safeValidateExtensionManifest(manifest);
@@ -146,7 +120,6 @@ describe('ExtensionManifestSchema', () => {
       id: 'my-extension',
       name: '',
       version: '1.0.0',
-      permissions: {},
     };
 
     const result = safeValidateExtensionManifest(manifest);
@@ -161,7 +134,6 @@ describe('ExtensionManifestSchema', () => {
       id: 'my-extension',
       name: 'A'.repeat(101),
       version: '1.0.0',
-      permissions: {},
     };
 
     const result = safeValidateExtensionManifest(manifest);
@@ -177,7 +149,6 @@ describe('ExtensionManifestSchema', () => {
       id: 'my-extension',
       name: 'My Extension',
       version: '1.0',
-      permissions: {},
     };
 
     const result = safeValidateExtensionManifest(manifest);
@@ -196,7 +167,6 @@ describe('ExtensionManifestSchema', () => {
         id: 'my-extension',
         name: 'My Extension',
         version,
-        permissions: {},
       };
 
       const result = safeValidateExtensionManifest(manifest);
@@ -204,73 +174,15 @@ describe('ExtensionManifestSchema', () => {
     });
   });
 
-  it('should reject manifest missing permissions', () => {
-    const manifest = {
-      id: 'my-extension',
-      name: 'My Extension',
-      version: '1.0.0',
-    };
-
-    const result = safeValidateExtensionManifest(manifest);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.errors[0].path).toContain('permissions');
-    }
-  });
-
-  it('should reject manifest with duplicate tool names', () => {
-    const manifest = {
-      id: 'my-extension',
-      name: 'My Extension',
-      version: '1.0.0',
-      permissions: {},
-      tools: [
-        {
-          name: 'my_tool',
-          description: 'First tool',
-          category: 'custom',
-          icon: 'tool',
-          pythonModule: './tools.py',
-          pythonFunction: 'tool1',
-          schema: {
-            type: 'object',
-            properties: {},
-          },
-        },
-        {
-          name: 'my_tool',
-          description: 'Second tool with same name',
-          category: 'custom',
-          icon: 'tool',
-          pythonModule: './tools.py',
-          pythonFunction: 'tool2',
-          schema: {
-            type: 'object',
-            properties: {},
-          },
-        },
-      ],
-    };
-
-    const result = safeValidateExtensionManifest(manifest);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.errors[0].message).toContain('unique');
-    }
-  });
-
   it('should reject manifest with invalid tool name (camelCase)', () => {
     const manifest = {
       id: 'my-extension',
       name: 'My Extension',
       version: '1.0.0',
-      permissions: {},
       tools: [
         {
           name: 'myTool',
           description: 'Tool with camelCase name',
-          category: 'custom',
-          icon: 'tool',
           pythonModule: './tools.py',
           pythonFunction: 'my_tool',
           schema: {
@@ -294,13 +206,10 @@ describe('ExtensionManifestSchema', () => {
       id: 'my-extension',
       name: 'My Extension',
       version: '1.0.0',
-      permissions: {},
       tools: [
         {
           name: 'my_tool_name',
           description: 'Tool with snake_case name',
-          category: 'custom',
-          icon: 'tool',
           pythonModule: './tools.py',
           pythonFunction: 'my_tool_name',
           schema: {
@@ -314,115 +223,15 @@ describe('ExtensionManifestSchema', () => {
     const result = safeValidateExtensionManifest(manifest);
     expect(result.success).toBe(true);
   });
-
-  it('should reject manifest with invalid URL', () => {
-    const manifest = {
-      id: 'my-extension',
-      name: 'My Extension',
-      version: '1.0.0',
-      permissions: {},
-      homepage: 'not-a-url',
-    };
-
-    const result = safeValidateExtensionManifest(manifest);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.errors[0].path).toContain('homepage');
-      expect(result.error.errors[0].message).toContain('URL');
-    }
-  });
-
-  it('should reject manifest with unknown properties', () => {
-    const manifest = {
-      id: 'my-extension',
-      name: 'My Extension',
-      version: '1.0.0',
-      permissions: {},
-      unknownField: 'should not be allowed',
-    };
-
-    const result = safeValidateExtensionManifest(manifest);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.errors[0].message).toContain('Unrecognized');
-    }
-  });
-
-  it('should validate valid filesystem permission values', () => {
-    const values = ['none', 'project', 'workspace', 'system'] as const;
-
-    values.forEach((filesystem) => {
-      const manifest = {
-        id: 'my-extension',
-        name: 'My Extension',
-        version: '1.0.0',
-        permissions: { filesystem },
-      };
-
-      const result = safeValidateExtensionManifest(manifest);
-      expect(result.success).toBe(true);
-    });
-  });
-
-  it('should reject invalid filesystem permission value', () => {
-    const manifest = {
-      id: 'my-extension',
-      name: 'My Extension',
-      version: '1.0.0',
-      permissions: {
-        filesystem: 'invalid',
-      },
-    };
-
-    const result = safeValidateExtensionManifest(manifest);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.errors[0].path).toEqual(['permissions', 'filesystem']);
-    }
-  });
-
-  it('should validate complete signature fields', () => {
-    const manifest = {
-      id: 'my-extension',
-      name: 'My Extension',
-      version: '1.0.0',
-      permissions: {},
-      signature: 'base64signature',
-      signatureAlgorithm: 'ed25519' as const,
-      publicKeyId: 'key-123',
-    };
-
-    const result = safeValidateExtensionManifest(manifest);
-    expect(result.success).toBe(true);
-  });
-
-  it('should reject partial signature fields', () => {
-    const manifest = {
-      id: 'my-extension',
-      name: 'My Extension',
-      version: '1.0.0',
-      permissions: {},
-      signature: 'base64signature',
-      // Missing signatureAlgorithm and publicKeyId
-    };
-
-    const result = safeValidateExtensionManifest(manifest);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.errors[0].message).toContain('signature');
-    }
-  });
 });
 
-describe('ToolDefinitionSchema', () => {
+describe('LuaToolDefinitionSchema', () => {
   it('should validate a complete tool definition', () => {
     const tool = {
       name: 'my_tool',
       description: 'A useful tool',
-      category: 'custom' as const,
-      icon: 'tool',
-      pythonModule: './tools.py',
-      pythonFunction: 'my_tool_func',
+      luaScript: './tools.lua',
+      luaFunction: 'my_tool',
       schema: {
         type: 'object' as const,
         properties: {
@@ -433,60 +242,41 @@ describe('ToolDefinitionSchema', () => {
         },
         required: ['input'],
       },
-      examples: ['Example usage'],
-      documentation: 'Full documentation',
-      tips: ['Tip 1', 'Tip 2'],
     };
 
-    const result = ToolDefinitionSchema.safeParse(tool);
+    const result = LuaToolDefinitionSchema.safeParse(tool);
     expect(result.success).toBe(true);
   });
 
   it('should reject tool with missing required fields', () => {
     const tool = {
       name: 'my_tool',
-      description: 'A useful tool',
-      // Missing category, icon, pythonModule, pythonFunction, schema
+      // Missing description
     };
 
-    const result = ToolDefinitionSchema.safeParse(tool);
+    const result = LuaToolDefinitionSchema.safeParse(tool);
     expect(result.success).toBe(false);
   });
 });
 
-describe('ExtensionPermissionsSchema', () => {
-  it('should validate empty permissions', () => {
-    const permissions = {};
-
-    const result = ExtensionPermissionsSchema.safeParse(permissions);
-    expect(result.success).toBe(true);
+describe('LifecycleConfigSchema', () => {
+  it('defaults missing hooks to false', () => {
+    const parsed = LifecycleConfigSchema.parse({ onProjectOpen: true });
+    expect(parsed.onProjectOpen).toBe(true);
+    expect(parsed.onProjectClose).toBe(false);
+    expect(parsed.onSectionSave).toBe(false);
   });
+});
 
-  it('should validate permissions with all fields', () => {
-    const permissions = {
-      tools: ['read_file', 'write_file'],
-      filesystem: 'project' as const,
-      network: true,
-      settings: true,
-      entityApi: {
-        read: true,
-        write: true,
-        tags: true,
-      },
-    };
+describe('validateExtensionManifest', () => {
+  it('parses defaults and returns a typed manifest', () => {
+    const manifest = validateExtensionManifest({
+      id: 'my-extension',
+      name: 'My Extension',
+      version: '1.0.0',
+    });
 
-    const result = ExtensionPermissionsSchema.safeParse(permissions);
-    expect(result.success).toBe(true);
-  });
-
-  it('should validate partial entityApi permissions', () => {
-    const permissions = {
-      entityApi: {
-        read: true,
-      },
-    };
-
-    const result = ExtensionPermissionsSchema.safeParse(permissions);
-    expect(result.success).toBe(true);
+    expect(ExtensionManifestSchema.safeParse(manifest).success).toBe(true);
+    expect(manifest.tools).toEqual([]);
   });
 });

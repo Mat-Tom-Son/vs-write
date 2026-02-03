@@ -1,0 +1,75 @@
+{
+  "id": "entity-stats-lua",
+  "name": "Entity Stats (Lua)",
+  "version": "1.0.0",
+  "description": "Generate statistics and analytics about entities in the project",
+  "author": "VS Write Team",
+  "permissions": ["file_read", "entity_read"],
+  "tools": [
+    {
+      "name": "entity_stats",
+      "description": "Generate comprehensive statistics about entities in the project",
+      "luaScript": "./tools.lua",
+      "luaFunction": "entity_stats",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "include_mentions": {
+            "type": "boolean",
+            "description": "Include mention counts per entity. Defaults to true."
+          },
+          "include_distribution": {
+            "type": "boolean",
+            "description": "Include distribution across sections. Defaults to true."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "entity_frequency",
+      "description": "Get the most or least frequently mentioned entities",
+      "luaScript": "./tools.lua",
+      "luaFunction": "entity_frequency",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "top": {
+            "type": "integer",
+            "description": "Number of top entities to show. Defaults to 10."
+          },
+          "order": {
+            "type": "string",
+            "enum": ["most", "least"],
+            "description": "Sort by most or least frequent. Defaults to 'most'."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Filter by entity type (e.g., 'fact', 'rule', 'concept')."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "entity_coverage",
+      "description": "Identify entities that may need more coverage or are over-represented",
+      "luaScript": "./tools.lua",
+      "luaFunction": "entity_coverage",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "threshold_low": {
+            "type": "integer",
+            "description": "Mentions below this are 'under-covered'. Defaults to 2."
+          },
+          "threshold_high": {
+            "type": "integer",
+            "description": "Mentions above this are 'over-covered'. Defaults to 20."
+          }
+        },
+        "required": []
+      }
+    }
+  ]
+}

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
-import { open } from '@tauri-apps/plugin-dialog';
+import { confirm as confirmDialog, message, open } from '@tauri-apps/plugin-dialog';
+import { listen } from '@tauri-apps/api/event';
 import { useStoryStore } from './lib/store';
 import { MenuBar } from './components/MenuBar';
+import { NewProjectDialog } from './components/NewProjectDialog';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ActivityBar, type ActivityView } from './components/ActivityBar';
 import { FilesPanel } from './components/Sidebar/FilesPanel';
@@ -12,6 +14,9 @@ import { ExtensionsPanel } from './components/Sidebar/ExtensionsPanel';
 import { SectionEditor } from './components/Editor/SectionEditor';
 import { TabBar } from './components/Editor/TabBar';
 import { FileViewer } from './components/Editor/FileViewer';
+import { SettingsDialog } from './components/SettingsDialog';
+import { formatError } from './lib/errors';
+import { isMac } from './lib/platform';
 import './App.css';
 
 export default function App() {
@@ -28,11 +33,17 @@ export default function App() {
   const createNewProject = useStoryStore((s) => s.createNewProject);
   const openProject = useStoryStore((s) => s.openProject);
   const saveProject = useStoryStore((s) => s.saveProject);
+  const closeProject = useStoryStore((s) => s.closeProject);
   const unsavedSections = useStoryStore((s) => Object.keys(s.dirtySections).length);
   const unsavedEntities = useStoryStore((s) => Object.keys(s.dirtyEntities).length);
   const unsavedFiles = useStoryStore((s) => (s.dirtyProject ? 1 : 0));
   const initializeExtensions = useStoryStore((s) => s.initializeExtensions);
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(280);
+  const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+
+  const openNewProjectDialog = useCallback(() => setNewProjectDialogOpen(true), []);
+  const openSettingsDialog = useCallback(() => setSettingsDialogOpen(true), []);
 
   const activeTab = openTabs.find((t) => t.id === activeTabId);
 
@@ -67,6 +78,33 @@ export default function App() {
     '--sidebar-padding': '16px', // Fixed padding for consistent look
   };
 
+  const handleOpenProject = useCallback(async () => {
+    try {
+      const folderPath = await open({
+        directory: true,
+        multiple: false,
+        recursive: true,
+        title: 'Open VS Write Project',
+      });
+
+      if (folderPath && typeof folderPath === 'string') {
+        await openProject(folderPath);
+      }
+    } catch (error) {
+      console.error('Failed to open project:', error);
+      await message(`Failed to open project: ${formatError(error)}`, { kind: 'error' });
+    }
+  }, [openProject]);
+
+  const handleSaveProject = useCallback(async () => {
+    try {
+      await saveProject();
+    } catch (error) {
+      console.error('Failed to save project:', error);
+      await message(`Failed to save project: ${formatError(error)}`, { kind: 'error' });
+    }
+  }, [saveProject]);
+
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
     async (e: KeyboardEvent) => {
@@ -75,66 +113,76 @@ export default function App() {
       // Save project (Ctrl+S)
       if (mod && e.key === 's') {
         e.preventDefault();
-        try {
-          await saveProject();
-        } catch (error) {
-          console.error('Failed to save project:', error);
-          alert('Failed to save project. See console for details.');
-        }
+        await handleSaveProject();
       }
 
       // Open project (Ctrl+O)
       if (mod && e.key === 'o') {
         e.preventDefault();
-        try {
-          const folderPath = await open({
-            directory: true,
-            multiple: false,
-            title: 'Open VS Write Project',
-          });
-
-          if (folderPath && typeof folderPath === 'string') {
-            await openProject(folderPath);
-          }
-        } catch (error) {
-          console.error('Failed to open project:', error);
-          alert('Failed to open project. See console for details.');
-        }
+        await handleOpenProject();
       }
 
       // New project (Ctrl+N)
       if (mod && e.key === 'n') {
         e.preventDefault();
-        try {
-          const projectName = prompt('Enter project name:');
-          if (!projectName) return;
-
-          const folderPath = await open({
-            directory: true,
-            multiple: false,
-            title: 'Select parent folder for new project',
-          });
-
-          if (folderPath && typeof folderPath === 'string') {
-            // Normalize path separators for the platform
-            const separator = folderPath.includes('\\') ? '\\' : '/';
-            const projectSlug = projectName.toLowerCase().replace(/\s+/g, '-');
-            const projectPath = `${folderPath}${separator}${projectSlug}`;
-            await createNewProject(projectPath, projectName);
-          }
-        } catch (error) {
-          console.error('Failed to create project:', error);
-          alert(`Failed to create project: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
+        openNewProjectDialog();
       }
     },
-    [saveProject, openProject, createNewProject],
+    [handleSaveProject, handleOpenProject, openNewProjectDialog],
   );
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  // Native menu (macOS) -> frontend actions
+  useEffect(() => {
+    if (!isMac()) return;
+
+    const unlistenPromise = listen<{ action: string }>('native_menu_action', (event) => {
+      const action = event.payload.action;
+      if (action === 'new_project') {
+        setNewProjectDialogOpen(true);
+      } else if (action === 'open_project') {
+        void handleOpenProject();
+      } else if (action === 'save_project') {
+        void handleSaveProject();
+      } else if (action === 'close_project') {
+        void (async () => {
+          const { projectRoot: currentProjectRoot, isDirty: currentIsDirty } = useStoryStore.getState();
+
+          if (!currentProjectRoot) {
+            await message('No project open.', { kind: 'warning' });
+            return;
+          }
+
+          if (currentIsDirty) {
+            const shouldSave = await confirmDialog('Save changes before closing?', {
+              kind: 'warning',
+              okLabel: 'Save',
+              cancelLabel: "Don't Save",
+            });
+            if (shouldSave) {
+              await handleSaveProject();
+            }
+          }
+
+          await closeProject();
+        })();
+      } else if (action === 'settings') {
+        if (!useStoryStore.getState().projectRoot) {
+          message('No project open.', { kind: 'warning' }).catch(() => {});
+          return;
+        }
+        setSettingsDialogOpen(true);
+      }
+    });
+
+    return () => {
+      void unlistenPromise.then((unlisten) => unlisten()).catch(() => {});
+    };
+  }, [closeProject, handleOpenProject, handleSaveProject]);
 
   // Warn on unsaved changes
   useEffect(() => {
@@ -170,8 +218,9 @@ export default function App() {
           }
           useStoryStore.getState().notifyFileChange();
 
-          const shouldReload = confirm(
-            `File "${filePath}" was modified externally. Reload project? (Unsaved changes will be lost)`
+          const shouldReload = await confirmDialog(
+            `File "${filePath}" was modified externally. Reload project? (Unsaved changes will be lost)`,
+            { kind: 'warning', okLabel: 'Reload', cancelLabel: 'Keep working' },
           );
 
           if (shouldReload) {
@@ -181,7 +230,7 @@ export default function App() {
               }
             } catch (error) {
               console.error('Failed to reload project:', error);
-              alert('Failed to reload project. See console for details.');
+              await message('Failed to reload project. See console for details.', { kind: 'error' });
             }
           }
         });
@@ -216,19 +265,30 @@ export default function App() {
     });
   }, [initializeExtensions]);
 
+  const newProjectDialog = (
+    <NewProjectDialog
+      open={newProjectDialogOpen}
+      onOpenChange={setNewProjectDialogOpen}
+      onCreate={createNewProject}
+    />
+  );
+
   // Show welcome screen if no project is open
   if (!projectRoot) {
     return (
       <div className="app">
-        <MenuBar />
-        <WelcomeScreen />
+        {!isMac() && <MenuBar onNewProject={openNewProjectDialog} onOpenSettings={openSettingsDialog} />}
+        <WelcomeScreen onNewProject={openNewProjectDialog} />
+        {newProjectDialog}
+        <SettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
       </div>
     );
   }
 
   return (
     <div className="app">
-      <MenuBar />
+      {!isMac() && <MenuBar onNewProject={openNewProjectDialog} onOpenSettings={openSettingsDialog} />}
+      <SettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
       <header className="titlebar">
         <span className="project-name">
           {project.name}
@@ -313,6 +373,7 @@ export default function App() {
         <span>{project.entities.length} entities</span>
         <span>{activeSection?.diagnostics.length || 0} issues</span>
       </footer>
+      {newProjectDialog}
     </div>
   );
 }

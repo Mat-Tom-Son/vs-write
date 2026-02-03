@@ -5,7 +5,7 @@
  * extension lifecycle hooks at the appropriate times.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 describe('Store Lifecycle Hooks', () => {
   // Mock ExtensionService

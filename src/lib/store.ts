@@ -87,7 +87,7 @@ interface StoryActions {
 
 type StoryStore = StoryState & StoryActions;
 
-type ProjectServiceInternal = ProjectService & {
+type ProjectServiceInternal = {
   _project: Project;
   dirtyEntities: Set<string>;
   dirtySections: Set<string>;
@@ -628,6 +628,12 @@ export const useStoryStore = create<StoryStore>()(
         console.log('[Store] Initializing native Lua extensions');
 
         try {
+          // Install bundled Lua extensions (if any) into app data directory.
+          const installedIds = await NativeExtensionService.installBundledLuaExtensions();
+          if (installedIds.length > 0) {
+            console.log(`[Store] Installed/updated bundled extensions: ${installedIds.join(', ')}`);
+          }
+
           // Auto-load extensions from the extensions directory
           const loadedIds = await NativeExtensionService.autoLoadExtensions();
           console.log(`[Store] Auto-loaded ${loadedIds.length} extension(s)`);

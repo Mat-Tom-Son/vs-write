@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, type LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import {
   TOOL_REGISTRY,
@@ -79,7 +79,9 @@ export function ToolsPanel() {
             All
           </Button>
           {categories.map((category) => {
-            const IconComponent = (LucideIcons as Record<string, typeof LucideIcons.Circle>)[getCategoryIcon(category)] || LucideIcons.Circle;
+            const IconComponent =
+              (LucideIcons as unknown as Record<string, LucideIcon>)[getCategoryIcon(category)] ??
+              LucideIcons.Circle;
             return (
               <Button
                 key={category}

@@ -1,0 +1,55 @@
+{
+  "id": "section-outline-lua",
+  "name": "Section Outline (Lua)",
+  "version": "1.0.0",
+  "description": "Generate outlines and summaries of project sections",
+  "author": "VS Write Team",
+  "permissions": ["file_read", "entity_read"],
+  "tools": [
+    {
+      "name": "section_outline",
+      "description": "Generate a structured outline of the project sections, showing hierarchy, word counts, and entity mentions",
+      "luaScript": "./tools.lua",
+      "luaFunction": "section_outline",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "include_word_count": {
+            "type": "boolean",
+            "description": "Include word count for each section. Defaults to true."
+          },
+          "include_entities": {
+            "type": "boolean",
+            "description": "Include entity mentions in each section. Defaults to true."
+          },
+          "format": {
+            "type": "string",
+            "enum": ["markdown", "plain", "tree"],
+            "description": "Output format. Defaults to 'markdown'."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "section_detail",
+      "description": "Get detailed information about a specific section including content preview, entities, and metadata",
+      "luaScript": "./tools.lua",
+      "luaFunction": "section_detail",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "section_id": {
+            "type": "string",
+            "description": "The ID of the section to examine"
+          },
+          "preview_length": {
+            "type": "integer",
+            "description": "Number of characters to include in content preview. Defaults to 500."
+          }
+        },
+        "required": ["section_id"]
+      }
+    }
+  ]
+}

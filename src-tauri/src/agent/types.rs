@@ -52,6 +52,8 @@ pub enum ApprovalMode {
     /// All tools run automatically without approval
     #[default]
     AutoApprove,
+    /// Pause for approval on High risk tools only
+    ApproveDangerous,
     /// Pause for approval on Medium and High risk tools
     ApproveWrites,
     /// Pause for approval on all tools
@@ -65,6 +67,7 @@ impl ApprovalMode {
     pub fn needs_approval(&self, risk: ToolRisk) -> bool {
         match self {
             ApprovalMode::AutoApprove => false,
+            ApprovalMode::ApproveDangerous => risk >= ToolRisk::High,
             ApprovalMode::ApproveWrites => risk >= ToolRisk::Medium,
             ApprovalMode::ApproveAll => true,
             ApprovalMode::DryRun => true,

@@ -35,7 +35,7 @@ export class ProjectService {
   private recentlyWrittenFiles = new Set<string>();
 
   // Track active timers for cleanup on close
-  private activeTimers = new Set<NodeJS.Timeout>();
+  private activeTimers = new Set<ReturnType<typeof setTimeout>>();
 
   private constructor(
     fileService: FileService,
@@ -52,7 +52,13 @@ export class ProjectService {
    */
   static async open(projectRoot: string): Promise<ProjectService> {
     // Normalize path separators to forward slashes (works on all platforms with Tauri)
-    const normalizedRoot = projectRoot.replace(/\\/g, '/');
+    const normalizedRoot = projectRoot.replace(/\\/g, '/').replace(/\/+$/, '');
+
+    if (!(await FileService.isValidProject(normalizedRoot))) {
+      throw new Error(
+        `No project.yaml found in "${normalizedRoot}". Select the project folder (the one containing project.yaml).`,
+      );
+    }
     const fileService = new FileService(normalizedRoot);
     const dbService = await DatabaseService.create(normalizedRoot);
 
@@ -67,7 +73,7 @@ export class ProjectService {
   static async create(projectRoot: string, projectName: string): Promise<ProjectService> {
     try {
       // Normalize path separators to forward slashes (works on all platforms with Tauri)
-      const normalizedRoot = projectRoot.replace(/\\/g, '/');
+      const normalizedRoot = projectRoot.replace(/\\/g, '/').replace(/\/+$/, '');
       console.log('[ProjectService] Creating project:', { projectRoot: normalizedRoot, projectName });
 
       // Create folder structure
@@ -94,6 +100,10 @@ export class ProjectService {
         settings: project.settings
       });
       console.log('[ProjectService] project.yaml written');
+
+      if (!(await FileService.isValidProject(normalizedRoot))) {
+        throw new Error(`Project creation failed: project.yaml was not written to "${normalizedRoot}".`);
+      }
 
       // Initialize database
       console.log('[ProjectService] Initializing database...');
@@ -570,7 +580,8 @@ export class ProjectService {
       name: entity.name,
       type: entity.type,
       description: entity.description,
-      attributes: entity.attributes,
+      aliases: entity.aliases,
+      metadata: entity.metadata,
     });
     return await xxhash32(content);
   }

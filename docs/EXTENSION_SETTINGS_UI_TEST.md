@@ -54,9 +54,9 @@ The extension settings UI is **fully implemented and functional**. This document
 
 3. Navigate to the Extensions panel in the sidebar
 
-4. If no extensions are installed, install the `starter-extension`:
-   - It's located in `examples/starter-extension/`
-   - Build it as a .vsext package or install from marketplace
+4. If no extensions are installed, load the `starter-extension-lua` example:
+   - It's located in `examples/starter-extension-lua/`
+   - Load the extension folder via the Extensions panel "Load" button
 
 5. Click the Settings button (gear icon) next to the extension
 

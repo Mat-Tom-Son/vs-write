@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog';
 import { useStoryStore } from '../../lib/store';
 import type { Entity, EntityType } from '../../lib/schemas';
 import { EntityLinker } from '../Inspector/EntityLinker';
@@ -94,9 +95,14 @@ function EntityItem({ entity, isSelected, onSelect }: { entity: Entity; isSelect
         </button>
         <button
           className="entity-action-btn"
-          onClick={(e) => {
+          onClick={async (e) => {
             e.stopPropagation();
-            if (confirm(`Delete "${entity.name}"?`)) {
+            const confirmed = await confirmDialog(`Delete "${entity.name}"?`, {
+              kind: 'warning',
+              okLabel: 'Delete',
+              cancelLabel: 'Cancel',
+            });
+            if (confirmed) {
               deleteEntity(entity.id);
             }
           }}

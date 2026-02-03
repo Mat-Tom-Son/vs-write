@@ -223,17 +223,22 @@ class NativeExtensionServiceClass {
 
     // Update cache for each extension
     for (const id of extensionIds) {
-      if (!this.loadedExtensions.has(id)) {
-        const hooks = await this.getExtensionHooks(id);
-        this.loadedExtensions.set(id, {
-          id,
-          name: id, // We don't have the full name without re-reading manifest
-          version: 'unknown',
-          toolCount: toolCountMap.get(id) || 0,
-          hooks,
-          loadedAt: new Date(),
-        });
+      const toolCount = toolCountMap.get(id) || 0;
+      const existing = this.loadedExtensions.get(id);
+      if (existing) {
+        this.loadedExtensions.set(id, { ...existing, toolCount });
+        continue;
       }
+
+      const hooks = await this.getExtensionHooks(id);
+      this.loadedExtensions.set(id, {
+        id,
+        name: id, // We don't have the full name without re-reading manifest
+        version: 'unknown',
+        toolCount,
+        hooks,
+        loadedAt: new Date(),
+      });
     }
 
     // Remove extensions that are no longer loaded
@@ -311,6 +316,18 @@ class NativeExtensionServiceClass {
     }
 
     return loadedIds;
+  }
+
+  /**
+   * Install bundled Lua extensions shipped with the app.
+   *
+   * This copies bundled extension folders (from app resources) into the app data
+   * extensions directory so they can be auto-loaded on startup.
+   *
+   * @returns Array of extension IDs that were installed or updated
+   */
+  async installBundledLuaExtensions(): Promise<string[]> {
+    return await invoke<string[]>('install_bundled_lua_extensions');
   }
 
   /**

@@ -14,6 +14,7 @@ import { PromptResolver } from '../../lib/prompt-resolver';
 import { getToolByName } from '../../lib/tool-registry';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog';
 import type { ChatMessage, ChatConversation } from '../../services/DatabaseService';
 
 /**
@@ -21,10 +22,22 @@ import type { ChatMessage, ChatConversation } from '../../services/DatabaseServi
  * These match the AgentEvent enum in src-tauri/src/agent/types.rs
  */
 interface AgentEvent {
-  type: 'start' | 'tool_call_start' | 'tool_call_complete' | 'text_chunk' | 'complete' | 'error';
+  type:
+    | 'start'
+    | 'tool_call_start'
+    | 'tool_call_complete'
+    | 'tool_approval_required'
+    | 'tool_skipped'
+    | 'text_chunk'
+    | 'complete'
+    | 'error'
+    | 'cancelled';
   task?: string;
+  approval_id?: string;
   name?: string;
   args?: Record<string, unknown>;
+  risk?: 'low' | 'medium' | 'high';
+  reason?: string;
   result?: string;
   success?: boolean;
   truncated?: boolean;
@@ -46,6 +59,7 @@ interface AgentConfig {
   max_tokens: number;
   max_iterations: number;
   base_url?: string;
+  approval_mode?: 'auto_approve' | 'approve_dangerous' | 'approve_writes' | 'approve_all' | 'dry_run';
 }
 
 /**
@@ -299,67 +313,105 @@ export function NativeAgentPanel() {
             }
             break;
 
-          case 'tool_call_complete':
-            if (agentEvent.name) {
-              // Mark files as recently written when agent file-writing tools complete
-              // This prevents the file watcher from triggering a reload prompt
-              const fileWriteTools = ['write_file', 'append_file', 'delete_file'];
-              if (fileWriteTools.includes(agentEvent.name) && agentEvent.args?.path) {
-                const ps = projectServiceRef.current;
-                if (ps) {
-                  const filePath = agentEvent.args.path as string;
-                  ps.markFileAsWritten(filePath);
-                  console.log(`[Agent] Marked file as recently written: ${filePath}`);
+          case 'tool_call_complete': {
+            const toolName = agentEvent.name;
+            if (!toolName) break;
+
+            const toolArgs = (agentEvent.args as Record<string, unknown>) || {};
+            const toolResult = agentEvent.result || '';
+            const toolSuccess = agentEvent.success ?? true;
+
+            // Mark files as recently written when agent file-writing tools complete
+            // This prevents the file watcher from triggering a reload prompt
+            const fileWriteTools = ['write_file', 'append_file', 'delete_file'];
+            const pathArg = (toolArgs as { path?: unknown }).path;
+            if (fileWriteTools.includes(toolName) && typeof pathArg === 'string') {
+              const ps = projectServiceRef.current;
+              if (ps) {
+                ps.markFileAsWritten(pathArg);
+                console.log(`[Agent] Marked file as recently written: ${pathArg}`);
+              }
+            }
+
+            setTimeline(prev => {
+              const updated = [...prev];
+              const lastItem = updated[updated.length - 1];
+
+              if (lastItem && 'type' in lastItem && lastItem.type === 'tool_execution') {
+                // Find the pending tool call (one with empty result) and update it
+                const pendingIndex = lastItem.toolCalls.findIndex(
+                  tc => tc.name === toolName && tc.result === ''
+                );
+
+                if (pendingIndex !== -1) {
+                  // Update the pending entry with the result
+                  lastItem.toolCalls[pendingIndex] = {
+                    name: toolName,
+                    args: toolArgs,
+                    result: toolResult,
+                    success: toolSuccess
+                  };
+                } else {
+                  // No pending entry found, add as new (fallback)
+                  lastItem.toolCalls.push({
+                    name: toolName,
+                    args: toolArgs,
+                    result: toolResult,
+                    success: toolSuccess
+                  });
+                }
+              } else {
+                // No tool execution message exists, create one (shouldn't happen normally)
+                const toolExecMsg: ToolExecutionMessage = {
+                  id: `tool-exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                  type: 'tool_execution',
+                  conversation_id: convId,
+                  toolCalls: [{
+                    name: toolName,
+                    args: toolArgs,
+                    result: toolResult,
+                    success: toolSuccess
+                  }],
+                  created_at: new Date().toISOString()
+                };
+                updated.push(toolExecMsg);
+              }
+              return updated;
+            });
+            break;
+          }
+
+          case 'tool_approval_required': {
+            const approvalId = agentEvent.approval_id;
+            const toolName = agentEvent.name;
+
+            if (!approvalId || !toolName) break;
+
+            const args = agentEvent.args || {};
+            const risk = agentEvent.risk || 'medium';
+            const argsText = JSON.stringify(args, null, 2);
+            const truncatedArgs = argsText.length > 2000 ? `${argsText.slice(0, 2000)}\n…(truncated)` : argsText;
+
+            void (async () => {
+              try {
+                const approved = await confirmDialog(
+                  `Allow the agent to execute tool "${toolName}"?\n\nRisk: ${risk}\n\nArgs:\n${truncatedArgs}`,
+                  { kind: 'warning', okLabel: 'Allow', cancelLabel: 'Deny' },
+                );
+
+                await invoke('respond_tool_approval', { approvalId, approved });
+              } catch (error) {
+                console.error('Failed to handle tool approval:', error);
+                // Best-effort: deny if we couldn't prompt.
+                try {
+                  await invoke('respond_tool_approval', { approvalId, approved: false });
+                } catch (invokeError) {
+                  console.error('Failed to send tool approval denial:', invokeError);
                 }
               }
-
-              setTimeline(prev => {
-                const updated = [...prev];
-                const lastItem = updated[updated.length - 1];
-
-                if (lastItem && 'type' in lastItem && lastItem.type === 'tool_execution') {
-                  // Find the pending tool call (one with empty result) and update it
-                  const pendingIndex = lastItem.toolCalls.findIndex(
-                    tc => tc.name === agentEvent.name && tc.result === ''
-                  );
-
-                  if (pendingIndex !== -1) {
-                    // Update the pending entry with the result
-                    lastItem.toolCalls[pendingIndex] = {
-                      name: agentEvent.name,
-                      args: (agentEvent.args as Record<string, unknown>) || {},
-                      result: agentEvent.result || '',
-                      success: agentEvent.success ?? true
-                    };
-                  } else {
-                    // No pending entry found, add as new (fallback)
-                    lastItem.toolCalls.push({
-                      name: agentEvent.name,
-                      args: (agentEvent.args as Record<string, unknown>) || {},
-                      result: agentEvent.result || '',
-                      success: agentEvent.success ?? true
-                    });
-                  }
-                } else {
-                  // No tool execution message exists, create one (shouldn't happen normally)
-                  const toolExecMsg: ToolExecutionMessage = {
-                    id: `tool-exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                    type: 'tool_execution',
-                    conversation_id: convId,
-                    toolCalls: [{
-                      name: agentEvent.name,
-                      args: (agentEvent.args as Record<string, unknown>) || {},
-                      result: agentEvent.result || '',
-                      success: agentEvent.success ?? true
-                    }],
-                    created_at: new Date().toISOString()
-                  };
-                  updated.push(toolExecMsg);
-                }
-                return updated;
-              });
-            }
+            })();
             break;
+          }
 
           case 'complete':
             setIsLoading(false);
@@ -587,7 +639,10 @@ export function NativeAgentPanel() {
         systemPrompt: systemPrompt,
         workspace: projectRoot,
         messages: conversationHistory,
-        config,
+        config: {
+          ...config,
+          approval_mode: appSettings.maintenance?.toolApprovalMode ?? 'approve_dangerous',
+        },
       });
 
       setInput('');

@@ -3,6 +3,7 @@ import type { MouseEvent as ReactMouseEvent } from 'react';
 import { ChevronRight, ChevronDown, File, Folder, FolderOpen, RefreshCw } from 'lucide-react';
 import { readDir, exists, readTextFile } from '@tauri-apps/plugin-fs';
 import { useStoryStore, type EditorTab } from '../../lib/store';
+import { fileManagerName } from '../../lib/platform';
 
 interface FileNode {
   name: string;
@@ -297,7 +298,7 @@ export function FilesPanel() {
     setContextMenu(null);
   }, [contextMenu]);
 
-  const handleRevealInExplorer = useCallback(async () => {
+  const handleRevealInFileManager = useCallback(async () => {
     if (!contextMenu) return;
     try {
       const targetPath = contextMenu.node.isDirectory
@@ -416,8 +417,8 @@ export function FilesPanel() {
           )}
           <button onClick={() => void handleRefreshTarget()}>Refresh</button>
           <button onClick={() => void handleCopyPath()}>Copy Path</button>
-          <button onClick={() => void handleRevealInExplorer()}>
-            Reveal in Explorer
+          <button onClick={() => void handleRevealInFileManager()}>
+            Reveal in {fileManagerName()}
           </button>
         </div>
       )}

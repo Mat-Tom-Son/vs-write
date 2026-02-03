@@ -1,0 +1,79 @@
+{
+  "id": "tag-manager-lua",
+  "name": "Tag Manager (Lua)",
+  "version": "1.0.0",
+  "description": "Manage entity tags in sections - add, remove, and view tags",
+  "author": "VS Write Team",
+  "permissions": ["file_read", "file_write", "entity_read", "entity_write"],
+  "tools": [
+    {
+      "name": "add_entity_tag",
+      "description": "Add an entity tag to a section at a specific text range",
+      "luaScript": "./tools.lua",
+      "luaFunction": "add_entity_tag",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "section_id": {
+            "type": "string",
+            "description": "The ID of the section to add the tag to"
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "The ID of the entity to tag"
+          },
+          "from_pos": {
+            "type": "integer",
+            "description": "Start position of the tagged text (character offset)"
+          },
+          "to_pos": {
+            "type": "integer",
+            "description": "End position of the tagged text (character offset)"
+          }
+        },
+        "required": ["section_id", "entity_id", "from_pos", "to_pos"]
+      }
+    },
+    {
+      "name": "remove_entity_tag",
+      "description": "Remove an entity tag from a section",
+      "luaScript": "./tools.lua",
+      "luaFunction": "remove_entity_tag",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "section_id": {
+            "type": "string",
+            "description": "The ID of the section containing the tag"
+          },
+          "tag_id": {
+            "type": "string",
+            "description": "The ID of the tag to remove"
+          }
+        },
+        "required": ["section_id", "tag_id"]
+      }
+    },
+    {
+      "name": "tag_overview",
+      "description": "Get an overview of all tags in a section or the entire project",
+      "luaScript": "./tools.lua",
+      "luaFunction": "tag_overview",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "section_id": {
+            "type": "string",
+            "description": "Optional section ID to filter tags. If not specified, shows all tags."
+          },
+          "group_by": {
+            "type": "string",
+            "enum": ["section", "entity"],
+            "description": "Group results by section or entity. Defaults to 'section'."
+          }
+        },
+        "required": []
+      }
+    }
+  ]
+}

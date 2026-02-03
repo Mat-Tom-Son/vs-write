@@ -9,7 +9,9 @@
 
 use std::path::Path;
 use std::sync::Arc;
+use std::{collections::HashMap, time::Duration};
 use tokio::sync::mpsc;
+use tokio::sync::{oneshot, Mutex};
 use tokio_util::sync::CancellationToken;
 
 use super::llm::{LlmClient, LlmResponse};
@@ -18,6 +20,13 @@ use super::tools::{dispatch_tool, get_tool_schemas};
 use super::types::{
     AgentConfig, AgentError, AgentEvent, ApprovalMode, LlmProvider, Message, ToolResult, ToolRisk,
 };
+
+/// Pending tool approval requests (approval_id -> response channel).
+///
+/// This is managed at the app level so the frontend can approve/deny tool calls via IPC.
+pub type ToolApprovalStore = Arc<Mutex<HashMap<String, oneshot::Sender<bool>>>>;
+
+const TOOL_APPROVAL_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 // ============================================================================
 // Agent Execution
@@ -45,6 +54,7 @@ pub struct AgentRunResult {
 /// * `config` - Agent configuration
 /// * `event_tx` - Channel to send events for UI streaming (optional)
 /// * `extensions` - Optional extension registry for Lua tools
+/// * `tool_approvals` - Optional shared approval store for gated tool execution
 /// * `cancel_token` - Optional cancellation token to abort the run
 ///
 /// # Returns
@@ -57,6 +67,7 @@ pub async fn run_agent(
     config: AgentConfig,
     event_tx: Option<mpsc::Sender<AgentEvent>>,
     extensions: Option<Arc<ExtensionRegistry>>,
+    tool_approvals: Option<ToolApprovalStore>,
     cancel_token: Option<CancellationToken>,
 ) -> Result<AgentRunResult, AgentError> {
     let run_id = uuid::Uuid::new_v4().to_string();
@@ -213,6 +224,18 @@ pub async fn run_agent(
                         config.approval_mode
                     );
 
+                    // If we have an approval store, register the pending approval BEFORE emitting the event.
+                    let approval_rx = if let Some(store) = tool_approvals.as_ref() {
+                        let (tx, rx) = oneshot::channel::<bool>();
+                        {
+                            let mut pending = store.lock().await;
+                            pending.insert(approval_id.clone(), tx);
+                        }
+                        Some(rx)
+                    } else {
+                        None
+                    };
+
                     // Emit approval required event
                     if let Some(ref tx) = event_tx {
                         let _ = tx
@@ -226,15 +249,68 @@ pub async fn run_agent(
                             .await;
                     }
 
-                    // TODO: Wait for approval response via separate channel
-                    // For now, we'll auto-approve after emitting the event
-                    // A full implementation would need:
-                    // 1. An approval response channel
-                    // 2. A timeout for waiting
-                    // 3. Frontend UI to handle approval requests
-                    log::warn!(
-                        "Approval required but auto-approving (full approval flow not yet implemented)"
-                    );
+                    // If we have an approval receiver, block until the UI responds (or timeouts/cancelled).
+                    let approved = if let Some(rx) = approval_rx {
+                        let wait_for_approval = async { rx.await.unwrap_or(false) };
+
+                        let store = tool_approvals
+                            .as_ref()
+                            .expect("approval_rx implies tool_approvals is Some");
+
+                        let approved = if let Some(ref token) = cancel_token {
+                            tokio::select! {
+                                _ = token.cancelled() => {
+                                    // Best-effort cleanup.
+                                    let mut pending = store.lock().await;
+                                    pending.remove(&approval_id);
+                                    return Err(AgentError::Cancelled);
+                                }
+                                res = tokio::time::timeout(TOOL_APPROVAL_TIMEOUT, wait_for_approval) => {
+                                    res.unwrap_or(false)
+                                }
+                            }
+                        } else {
+                            tokio::time::timeout(TOOL_APPROVAL_TIMEOUT, wait_for_approval)
+                                .await
+                                .unwrap_or(false)
+                        };
+
+                        // Best-effort cleanup in case the responder never removed it.
+                        let mut pending = store.lock().await;
+                        pending.remove(&approval_id);
+
+                        approved
+                    } else {
+                        // No approval channel available (e.g. tests). Log and proceed.
+                        log::warn!(
+                            "Approval required for tool '{}' but no approval store was provided; auto-approving",
+                            tool_name
+                        );
+                        true
+                    };
+
+                    if !approved {
+                        let denial = "DENIED: Tool execution was blocked by user approval.".to_string();
+
+                        // Emit a completion event so the UI can display the outcome.
+                        if let Some(ref tx) = event_tx {
+                            let _ = tx
+                                .send(AgentEvent::ToolCallComplete {
+                                    name: tool_name.clone(),
+                                    args: args.clone(),
+                                    result: denial.clone(),
+                                    success: false,
+                                    truncated: false,
+                                    run_id: Some(run_id.clone()),
+                                })
+                                .await;
+                        }
+
+                        // Provide a tool result to the model so it can continue.
+                        conversation.push(Message::tool_result(&tool_call.id, &denial));
+                        all_tool_results.push(ToolResult::error(&tool_call.id, denial));
+                        continue;
+                    }
                 }
 
                 // Send tool call start event
@@ -357,7 +433,7 @@ pub async fn run_simple(
     workspace: &Path,
     config: AgentConfig,
 ) -> Result<String, AgentError> {
-    let result = run_agent(task, system_prompt, vec![], workspace, config, None, None, None).await?;
+    let result = run_agent(task, system_prompt, vec![], workspace, config, None, None, None, None).await?;
     Ok(result.response)
 }
 

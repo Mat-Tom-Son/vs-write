@@ -30,6 +30,15 @@
         },
         {
           "path": "$HOME/**"
+        },
+        {
+          "path": "$DESKTOP/**/.storyide/**"
+        },
+        {
+          "path": "$DOCUMENT/**/.storyide/**"
+        },
+        {
+          "path": "$HOME/**/.storyide/**"
         }
       ]
     },
@@ -44,6 +53,15 @@
         },
         {
           "path": "$HOME/**"
+        },
+        {
+          "path": "$DESKTOP/**/.storyide/**"
+        },
+        {
+          "path": "$DOCUMENT/**/.storyide/**"
+        },
+        {
+          "path": "$HOME/**/.storyide/**"
         }
       ]
     },
@@ -58,6 +76,24 @@
         },
         {
           "path": "$HOME/**"
+        },
+        {
+          "path": "$DESKTOP/**/.storyide"
+        },
+        {
+          "path": "$DOCUMENT/**/.storyide"
+        },
+        {
+          "path": "$HOME/**/.storyide"
+        },
+        {
+          "path": "$DESKTOP/**/.storyide/**"
+        },
+        {
+          "path": "$DOCUMENT/**/.storyide/**"
+        },
+        {
+          "path": "$HOME/**/.storyide/**"
         }
       ]
     },
@@ -75,6 +111,24 @@
         },
         {
           "path": "$HOME/**"
+        },
+        {
+          "path": "$DESKTOP/**/.storyide"
+        },
+        {
+          "path": "$DOCUMENT/**/.storyide"
+        },
+        {
+          "path": "$HOME/**/.storyide"
+        },
+        {
+          "path": "$DESKTOP/**/.storyide/**"
+        },
+        {
+          "path": "$DOCUMENT/**/.storyide/**"
+        },
+        {
+          "path": "$HOME/**/.storyide/**"
         }
       ]
     },
@@ -89,6 +143,24 @@
         },
         {
           "path": "$HOME/**"
+        },
+        {
+          "path": "$DESKTOP/**/.storyide"
+        },
+        {
+          "path": "$DOCUMENT/**/.storyide"
+        },
+        {
+          "path": "$HOME/**/.storyide"
+        },
+        {
+          "path": "$DESKTOP/**/.storyide/**"
+        },
+        {
+          "path": "$DOCUMENT/**/.storyide/**"
+        },
+        {
+          "path": "$HOME/**/.storyide/**"
         }
       ]
     },
@@ -103,6 +175,24 @@
         },
         {
           "path": "$HOME/**"
+        },
+        {
+          "path": "$DESKTOP/**/.storyide"
+        },
+        {
+          "path": "$DOCUMENT/**/.storyide"
+        },
+        {
+          "path": "$HOME/**/.storyide"
+        },
+        {
+          "path": "$DESKTOP/**/.storyide/**"
+        },
+        {
+          "path": "$DOCUMENT/**/.storyide/**"
+        },
+        {
+          "path": "$HOME/**/.storyide/**"
         }
       ]
     },
@@ -117,6 +207,24 @@
         },
         {
           "path": "$HOME/**"
+        },
+        {
+          "path": "$DESKTOP/**/.storyide"
+        },
+        {
+          "path": "$DOCUMENT/**/.storyide"
+        },
+        {
+          "path": "$HOME/**/.storyide"
+        },
+        {
+          "path": "$DESKTOP/**/.storyide/**"
+        },
+        {
+          "path": "$DOCUMENT/**/.storyide/**"
+        },
+        {
+          "path": "$HOME/**/.storyide/**"
         }
       ]
     }

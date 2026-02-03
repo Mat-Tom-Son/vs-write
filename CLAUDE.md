@@ -139,7 +139,7 @@ cargo clippy         # Lint
 
 The product is called **VS Write** (not "Story IDE" - that was the old name).
 - Package name: `vs-write`
-- Tauri identifier: `com.vswrite.app`
+- Tauri identifier: `com.vswrite.vswrite`
 
 ## What's Already Robust
 

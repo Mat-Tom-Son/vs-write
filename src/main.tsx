@@ -5,7 +5,7 @@ import App from './App.tsx'
 
 // Polyfill Buffer for gray-matter (Markdown frontmatter)
 import { Buffer } from 'buffer'
-globalThis.Buffer = Buffer
+(globalThis as unknown as { Buffer: typeof Buffer }).Buffer = Buffer
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -5,6 +5,9 @@ use zip::ZipArchive;
 use ed25519_dalek::{Signature, VerifyingKey, Verifier};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use sha2::{Sha256, Digest};
+use tauri::{AppHandle, Manager};
+
+use crate::agent::lua_extensions::ExtensionManifest;
 
 /// Validate extension ID to prevent path traversal attacks
 ///
@@ -44,6 +47,45 @@ fn validate_extension_id(id: &str) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+
+        if file_type.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else if file_type.is_file() {
+            fs::copy(&src_path, &dst_path)?;
+        } else if file_type.is_symlink() {
+            // Avoid copying symlinks to prevent unexpected filesystem behavior.
+            log::warn!("Skipping symlink in bundled extension: {}", src_path.display());
+        }
+    }
+    Ok(())
+}
+
+fn bundled_extensions_roots(app: &AppHandle) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        // When bundle resources include "../marketplace/extensions/*", the bundled files may live
+        // next to the Resources directory (macOS: Contents/marketplace/extensions).
+        roots.push(resource_dir.join("../marketplace/extensions"));
+        roots.push(resource_dir.join("marketplace/extensions"));
+    }
+
+    // In dev builds, fall back to the repository path so `tauri dev` works without requiring
+    // resources to be copied into the runtime resource directory.
+    if cfg!(debug_assertions) {
+        roots.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../marketplace/extensions"));
+    }
+
+    roots
 }
 
 #[derive(serde::Serialize)]
@@ -236,6 +278,143 @@ pub fn get_trusted_publishers() -> Vec<String> {
         .iter()
         .map(|(id, _)| id.to_string())
         .collect()
+}
+
+/// Install bundled Lua extensions into the app data extensions directory.
+///
+/// This copies any bundled extension directories that contain a `manifest.json` with at least one
+/// `luaScript` tool (or a `hooks.lua` file) into `${appDataDir}/extensions/<extension_id>`.
+///
+/// The install is idempotent: if an extension is already installed with the same version, it's
+/// skipped. If the bundled version differs, the installed copy is replaced.
+#[tauri::command]
+pub fn install_bundled_lua_extensions(app: AppHandle) -> Result<Vec<String>, String> {
+    let bundled_root = match bundled_extensions_roots(&app).into_iter().find(|p| p.exists()) {
+        Some(path) => path,
+        None => return Ok(Vec::new()),
+    };
+
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data directory: {}", e))?;
+    let extensions_dir = app_data_dir.join("extensions");
+
+    fs::create_dir_all(&extensions_dir).map_err(|e| {
+        format!(
+            "Failed to create extensions directory {}: {}",
+            extensions_dir.display(),
+            e
+        )
+    })?;
+
+    let mut installed_ids = Vec::new();
+
+    let entries = fs::read_dir(&bundled_root).map_err(|e| {
+        format!(
+            "Failed to read bundled extensions directory {}: {}",
+            bundled_root.display(),
+            e
+        )
+    })?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|e| format!("Failed to get file type: {}", e))?;
+        if !file_type.is_dir() {
+            continue;
+        }
+
+        let src_dir = entry.path();
+        let manifest_path = src_dir.join("manifest.json");
+        if !manifest_path.exists() {
+            continue;
+        }
+
+        let manifest_content = fs::read_to_string(&manifest_path).map_err(|e| {
+            format!(
+                "Failed to read bundled manifest {}: {}",
+                manifest_path.display(),
+                e
+            )
+        })?;
+        let manifest: ExtensionManifest = serde_json::from_str(&manifest_content).map_err(|e| {
+            format!(
+                "Failed to parse bundled manifest {}: {}",
+                manifest_path.display(),
+                e
+            )
+        })?;
+
+        let has_lua_tools = manifest.tools.iter().any(|t| t.lua_script.is_some());
+        let has_hooks = src_dir.join("hooks.lua").exists();
+        if !has_lua_tools && !has_hooks {
+            continue;
+        }
+
+        validate_extension_id(&manifest.id)?;
+
+        let dest_dir = extensions_dir.join(&manifest.id);
+
+        let mut should_install = true;
+        if dest_dir.exists() {
+            let existing_manifest_path = dest_dir.join("manifest.json");
+            if let Ok(existing_content) = fs::read_to_string(&existing_manifest_path) {
+                if let Ok(existing_manifest) = serde_json::from_str::<ExtensionManifest>(&existing_content)
+                {
+                    if existing_manifest.version == manifest.version {
+                        should_install = false;
+                    }
+                }
+            }
+        }
+
+        if !should_install {
+            continue;
+        }
+
+        if dest_dir.exists() {
+            let meta = fs::symlink_metadata(&dest_dir).map_err(|e| {
+                format!(
+                    "Failed to read existing extension path {}: {}",
+                    dest_dir.display(),
+                    e
+                )
+            })?;
+            if meta.is_dir() {
+                fs::remove_dir_all(&dest_dir).map_err(|e| {
+                    format!(
+                        "Failed to remove existing extension directory {}: {}",
+                        dest_dir.display(),
+                        e
+                    )
+                })?;
+            } else {
+                fs::remove_file(&dest_dir).map_err(|e| {
+                    format!(
+                        "Failed to remove existing extension file {}: {}",
+                        dest_dir.display(),
+                        e
+                    )
+                })?;
+            }
+        }
+
+        copy_dir_recursive(&src_dir, &dest_dir).map_err(|e| {
+            format!(
+                "Failed to install bundled extension '{}' to {}: {}",
+                manifest.id,
+                dest_dir.display(),
+                e
+            )
+        })?;
+
+        installed_ids.push(manifest.id);
+    }
+
+    Ok(installed_ids)
 }
 
 /// Extract a .vsext (ZIP) file to the extensions directory

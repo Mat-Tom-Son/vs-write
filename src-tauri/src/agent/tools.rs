@@ -898,12 +898,57 @@ pub fn run_shell(
         ("sh", "-c")
     };
 
-    let mut child = Command::new(shell)
-        .arg(shell_arg)
+    let mut cmd = Command::new(shell);
+    cmd.arg(shell_arg)
         .arg(command)
         .current_dir(&working_dir)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    // On macOS (especially when the app is launched from Finder), PATH is often minimal and
+    // won't include Homebrew locations like /opt/homebrew/bin. Add common locations to improve
+    // cross-platform usability without relying on shell init files.
+    if !cfg!(target_os = "windows") {
+        let mut entries: Vec<String> = std::env::var("PATH")
+            .unwrap_or_default()
+            .split(':')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect();
+
+        let mut extra: Vec<String> = Vec::new();
+
+        if let Ok(home) = std::env::var("HOME") {
+            extra.push(format!("{}/.cargo/bin", home));
+            extra.push(format!("{}/.local/bin", home));
+        }
+
+        if cfg!(target_os = "macos") {
+            extra.push("/opt/homebrew/bin".to_string());
+            extra.push("/opt/homebrew/sbin".to_string());
+            extra.push("/usr/local/bin".to_string());
+            extra.push("/usr/local/sbin".to_string());
+        } else {
+            extra.push("/usr/local/bin".to_string());
+            extra.push("/usr/local/sbin".to_string());
+        }
+
+        // Always include standard system locations as a fallback.
+        extra.push("/usr/bin".to_string());
+        extra.push("/bin".to_string());
+        extra.push("/usr/sbin".to_string());
+        extra.push("/sbin".to_string());
+
+        for path in extra.into_iter().rev() {
+            if !entries.iter().any(|p| p == &path) {
+                entries.insert(0, path);
+            }
+        }
+
+        cmd.env("PATH", entries.join(":"));
+    }
+
+    let mut child = cmd
         .spawn()
         .map_err(|e| format!("Failed to spawn command: {}", e))?;
 

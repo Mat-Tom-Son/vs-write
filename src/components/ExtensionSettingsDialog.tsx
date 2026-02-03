@@ -54,7 +54,7 @@ export function ExtensionSettingsDialog({ extension, onClose }: ExtensionSetting
   }, [extension.id, properties]);
 
   // Validate a single field
-  const validateField = useCallback((key: string, value: unknown, prop: JSONSchemaProperty): string | null => {
+  const validateField = useCallback((value: unknown, prop: JSONSchemaProperty): string | null => {
     if (prop.type === 'integer' || prop.type === 'number') {
       const num = value as number;
       if (prop.minimum !== undefined && num < prop.minimum) {
@@ -78,7 +78,7 @@ export function ExtensionSettingsDialog({ extension, onClose }: ExtensionSetting
     setIsDirty(true);
 
     // Validate and update errors
-    const error = validateField(key, value, prop);
+    const error = validateField(value, prop);
     setErrors(prev => {
       if (error) {
         return { ...prev, [key]: error };
