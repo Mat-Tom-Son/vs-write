@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Send, Bot, User, Terminal, AlertCircle, ChevronDown, ChevronRight, MessageSquare, Plus, Cpu } from 'lucide-react';
+import { Send, Bot, User, Terminal, AlertCircle, ChevronDown, ChevronRight, MessageSquare, Plus, Cpu, Copy, Check, ArrowDown } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
@@ -16,6 +16,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { confirm as confirmDialog } from '@tauri-apps/plugin-dialog';
 import type { ChatMessage, ChatConversation } from '../../services/DatabaseService';
+import { ChatMarkdown } from '../Chat/ChatMarkdown';
 
 /**
  * Event types emitted by the native Rust agent
@@ -87,6 +88,38 @@ interface ToolExecutionMessage {
 
 type TimelineItem = DisplayMessage | ToolExecutionMessage;
 
+function CopyIconButton({ text, variant }: { text: string; variant: 'user' | 'assistant' }) {
+  const [copied, setCopied] = useState(false);
+
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // noop
+    }
+  };
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      onClick={onCopy}
+      className={
+        variant === 'user'
+          ? 'h-7 w-7 text-primary-foreground/80 hover:bg-primary-foreground/15 hover:text-primary-foreground'
+          : 'h-7 w-7 text-muted-foreground hover:text-foreground'
+      }
+      aria-label="Copy message"
+      title="Copy message"
+    >
+      {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+    </Button>
+  );
+}
+
 /**
  * NativeAgentPanel - Chat interface for the native Rust-based AI agent
  *
@@ -106,14 +139,22 @@ export function NativeAgentPanel() {
   const [currentConversationId, setCurrentConversationId] = useState<string>(() => `native-conv-${Date.now()}`);
   const [agentStatus, setAgentStatus] = useState<'idle' | 'running' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [unseenCount, setUnseenCount] = useState(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const refreshVersion = useRef(0);
   const messageIdCounter = useRef(0);
+  const timelineLengthRef = useRef(0);
 
   // Track processed run_ids to prevent duplicate event handling
   const processedRunIds = useRef<Set<string>>(new Set());
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    scrollRef.current?.scrollIntoView({ behavior });
+  }, []);
 
   // Ref to hold stable reference to conversation ID for event handler
   const currentConversationIdRef = useRef(currentConversationId);
@@ -458,12 +499,48 @@ export function NativeAgentPanel() {
     };
   }, [generateMessageId]); // Only re-register if generateMessageId changes (it shouldn't)
 
-  // Auto-scroll to bottom when new timeline items arrive
+  // Track whether the user is near the bottom of the scroll viewport
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    const root = scrollAreaRef.current;
+    const sentinel = scrollRef.current;
+    if (!root || !sentinel) return;
+
+    const viewport = root.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+    if (!viewport) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        const atBottom = !!entry?.isIntersecting;
+        setIsAtBottom(atBottom);
+        if (atBottom) setUnseenCount(0);
+      },
+      { root: viewport, threshold: 0, rootMargin: '0px 0px 200px 0px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, []);
+
+  // Auto-scroll only when the user is already near the bottom
+  useEffect(() => {
+    const prevLen = timelineLengthRef.current;
+    const currLen = timeline.length;
+    timelineLengthRef.current = currLen;
+
+    if (currLen < prevLen) {
+      setUnseenCount(0);
+      return;
     }
-  }, [timeline]);
+
+    if (currLen > prevLen) {
+      if (isAtBottom) {
+        scrollToBottom('smooth');
+      } else {
+        setUnseenCount((c) => c + (currLen - prevLen));
+      }
+    }
+  }, [timeline.length, isAtBottom, scrollToBottom]);
 
   // Load all conversations
   useEffect(() => {
@@ -556,6 +633,8 @@ export function NativeAgentPanel() {
       isLoading: true
     };
     setTimeline(prev => [...prev, loadingMessage]);
+    setUnseenCount(0);
+    requestAnimationFrame(() => scrollToBottom('smooth'));
 
     // Clear any previous error
     setErrorMessage(null);
@@ -742,20 +821,20 @@ export function NativeAgentPanel() {
           </div>
         </div>
 
-        {/* Conversation selector */}
-        <div className="flex items-center gap-2">
-          <DropdownMenu onOpenChange={(open) => open && refreshConversations()}>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="flex-1 justify-between">
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4" />
-                  <span className="text-xs truncate">
-                    {conversations.find(c => c.id === currentConversationId)?.title || 'Current Chat'}
-                  </span>
-                </div>
-                <ChevronDown className="w-4 h-4 ml-2" />
-              </Button>
-            </DropdownMenuTrigger>
+	        {/* Conversation selector */}
+	        <div className="flex items-center gap-2 min-w-0">
+	          <DropdownMenu onOpenChange={(open) => open && refreshConversations()}>
+	            <DropdownMenuTrigger asChild>
+	              <Button variant="outline" size="sm" className="flex-1 justify-between min-w-0">
+	                <div className="flex items-center gap-2 min-w-0">
+	                  <MessageSquare className="w-4 h-4 shrink-0" />
+	                  <span className="text-xs truncate min-w-0">
+	                    {conversations.find(c => c.id === currentConversationId)?.title || 'Current Chat'}
+	                  </span>
+	                </div>
+	                <ChevronDown className="w-4 h-4 ml-2 shrink-0" />
+	              </Button>
+	            </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-[280px]">
               <DropdownMenuLabel>Conversations</DropdownMenuLabel>
               <DropdownMenuSeparator />
@@ -793,24 +872,25 @@ export function NativeAgentPanel() {
       )}
 
       {/* Messages */}
-      <ScrollArea className="flex-1 min-h-0 p-4">
-        <div className="space-y-4">
+      <div className="relative flex-1 min-h-0">
+        <ScrollArea ref={scrollAreaRef} className="h-full min-h-0 p-4">
+          <div className="space-y-4">
           {timeline.map((item) => {
             // Render tool execution messages
             if ('type' in item && item.type === 'tool_execution') {
-              return (
-                <div key={item.id} className="flex gap-3 justify-start">
-                  <Avatar className="w-8 h-8">
-                    <AvatarFallback className="bg-muted">
-                      <Terminal className="w-4 h-4" />
-                    </AvatarFallback>
-                  </Avatar>
-
-                  <div className="flex flex-col gap-1 max-w-[80%] w-full">
-                    <div className="text-xs text-muted-foreground mb-1">
-                      Working...
-                    </div>
-                    {item.toolCalls.map((toolCall, idx) => {
+	              return (
+	                <div key={item.id} className="flex gap-3 justify-start min-w-0">
+	                  <Avatar className="w-8 h-8">
+	                    <AvatarFallback className="bg-muted">
+	                      <Terminal className="w-4 h-4" />
+	                    </AvatarFallback>
+	                  </Avatar>
+	
+		                  <div className="flex flex-col gap-1 max-w-[min(80%,calc(100%-44px))] w-full min-w-0">
+	                    <div className="text-xs text-muted-foreground mb-1">
+	                      Working...
+	                    </div>
+	                    {item.toolCalls.map((toolCall, idx) => {
                       // Get tool metadata from registry
                       const toolDef = getToolByName(toolCall.name);
                       const ToolIcon = toolDef
@@ -821,27 +901,29 @@ export function NativeAgentPanel() {
                         <Collapsible key={`${item.id}-tool-${idx}-${toolCall.name}`}>
                           <Card className="bg-muted/50 overflow-hidden">
                             <CollapsibleTrigger className="w-full p-2 hover:bg-muted/70 transition-colors">
-                              <div className="flex items-center gap-2 text-xs">
-                                <ChevronRight className="w-3 h-3 transition-transform [[data-state=open]>&]:rotate-90" />
-                                <ToolIcon className="w-3 h-3 text-primary" />
-                                <span className="font-medium">{toolCall.name}</span>
-                                {toolDef && (
-                                  <span className="text-muted-foreground text-[10px] hidden sm:inline">
-                                    - {toolDef.description}
-                                  </span>
-                                )}
-                                {Object.keys(toolCall.args).length > 0 && !toolDef && (
-                                  <span className="text-muted-foreground truncate flex-1 text-left">
-                                    ({Object.entries(toolCall.args).map(([k, v]) =>
-                                      `${k}: ${typeof v === 'string' ? v.substring(0, 20) : v}`
-                                    ).join(', ')})
-                                  </span>
-                                )}
-                                <span className={`ml-auto text-xs ${toolCall.result === '' ? 'text-blue-500' : toolCall.success ? 'text-green-600' : 'text-red-600'}`}>
-                                  {toolCall.result === '' ? '⋯' : toolCall.success ? '✓' : '✗'}
-                                </span>
-                              </div>
-                            </CollapsibleTrigger>
+	                              <div className="flex items-center gap-2 text-xs min-w-0">
+	                                <ChevronRight className="w-3 h-3 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
+	                                <ToolIcon className="w-3 h-3 shrink-0 text-primary" />
+	                                <div className="flex items-center gap-1 min-w-0 flex-1">
+	                                  <span className="font-medium truncate">{toolCall.name}</span>
+	                                  {toolDef && (
+	                                    <span className="text-muted-foreground text-[10px] hidden sm:inline truncate">
+	                                      - {toolDef.description}
+	                                    </span>
+	                                  )}
+	                                  {Object.keys(toolCall.args).length > 0 && !toolDef && (
+	                                    <span className="text-muted-foreground truncate">
+	                                      ({Object.entries(toolCall.args).map(([k, v]) =>
+	                                        `${k}: ${typeof v === 'string' ? v.substring(0, 20) : v}`
+	                                      ).join(', ')})
+	                                    </span>
+	                                  )}
+	                                </div>
+	                                <span className={`ml-auto shrink-0 text-xs ${toolCall.result === '' ? 'text-blue-500' : toolCall.success ? 'text-green-600' : 'text-red-600'}`}>
+	                                  {toolCall.result === '' ? '⋯' : toolCall.success ? '✓' : '✗'}
+	                                </span>
+	                              </div>
+	                            </CollapsibleTrigger>
                             <CollapsibleContent>
                               <div className="p-2 pt-0 text-xs text-muted-foreground space-y-2">
                                 {Object.keys(toolCall.args).length > 0 && (
@@ -875,18 +957,23 @@ export function NativeAgentPanel() {
 
             // Render regular messages
             const message = item as DisplayMessage;
-            return (
-              <div key={message.id} className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                {message.role === 'assistant' && (
-                  <Avatar className="w-8 h-8">
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      <Bot className="w-4 h-4" />
-                    </AvatarFallback>
-                  </Avatar>
-                )}
-
-                <div className={`flex flex-col gap-2 max-w-[80%] ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  <Card className={`p-3 ${message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-card'}`}>
+	            return (
+	              <div key={message.id} className={`flex gap-3 min-w-0 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+	                {message.role === 'assistant' && (
+	                  <Avatar className="w-8 h-8">
+	                    <AvatarFallback className="bg-primary text-primary-foreground">
+	                      <Bot className="w-4 h-4" />
+	                    </AvatarFallback>
+	                  </Avatar>
+	                )}
+	
+		                <div className={`flex flex-col gap-2 max-w-[min(80%,calc(100%-44px))] min-w-0 ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
+	                  <Card className={`relative group p-3 min-w-0 ${message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-card'}`}>
+	                    {!message.isLoading && message.content && (
+	                      <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
+	                        <CopyIconButton text={message.content} variant={message.role === 'user' ? 'user' : 'assistant'} />
+	                      </div>
+	                    )}
                     {message.isLoading ? (
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -894,7 +981,7 @@ export function NativeAgentPanel() {
                         <div className="w-2 h-2 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
                       </div>
                     ) : (
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      <ChatMarkdown content={message.content} variant={message.role === 'user' ? 'user' : 'assistant'} />
                     )}
                   </Card>
                 </div>
@@ -910,8 +997,27 @@ export function NativeAgentPanel() {
             );
           })}
           <div ref={scrollRef} />
-        </div>
-      </ScrollArea>
+          </div>
+        </ScrollArea>
+
+        {!isAtBottom && (
+          <div className="absolute bottom-4 right-4">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setUnseenCount(0);
+                scrollToBottom('smooth');
+              }}
+              className="shadow"
+            >
+              <ArrowDown className="w-4 h-4" />
+              {unseenCount > 0 ? `New messages (${unseenCount})` : 'Jump to bottom'}
+            </Button>
+          </div>
+        )}
+      </div>
 
       {/* Input */}
       <div className="p-4 border-t border-border">

@@ -8,6 +8,7 @@
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::{HashMap, HashSet};
 
 use super::types::{AgentConfig, AgentError, LlmProvider, Message, MessageRole, Tool, ToolCall, Usage};
 
@@ -155,6 +156,100 @@ fn openai_content_to_text(content: Option<Value>) -> Option<String> {
         }
         _ => None,
     }
+}
+
+const OPENAI_TOOL_NAME_MAX_LEN: usize = 64;
+
+fn is_openai_tool_name_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_' || c == '-'
+}
+
+fn is_openai_tool_name_valid(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= OPENAI_TOOL_NAME_MAX_LEN
+        && name.chars().all(is_openai_tool_name_char)
+}
+
+fn fnv1a64(input: &str) -> u64 {
+    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x100000001b3;
+
+    let mut hash = FNV_OFFSET;
+    for b in input.as_bytes() {
+        hash ^= u64::from(*b);
+        hash = hash.wrapping_mul(FNV_PRIME);
+    }
+    hash
+}
+
+fn sanitize_openai_tool_name(original: &str) -> String {
+    let mut out = String::with_capacity(original.len());
+    for c in original.chars() {
+        if is_openai_tool_name_char(c) {
+            out.push(c);
+        } else {
+            out.push('_');
+        }
+    }
+    if out.is_empty() {
+        out.push_str("tool");
+    }
+    out
+}
+
+fn openai_safe_tool_name(original: &str, attempt: u32) -> String {
+    if attempt == 0 && is_openai_tool_name_valid(original) {
+        return original.to_string();
+    }
+
+    let sanitized = sanitize_openai_tool_name(original);
+    let salt = if attempt == 0 {
+        original.to_string()
+    } else {
+        format!("{}#{}", original, attempt)
+    };
+    let hash = fnv1a64(&salt);
+    let suffix = format!("__{:016x}", hash);
+
+    // Keep within OpenAI max tool name length.
+    let max_base = OPENAI_TOOL_NAME_MAX_LEN.saturating_sub(suffix.len());
+    let mut base = sanitized;
+    if base.len() > max_base {
+        base.truncate(max_base);
+    }
+
+    let candidate = format!("{}{}", base, suffix);
+    debug_assert!(is_openai_tool_name_valid(&candidate));
+    candidate
+}
+
+fn openai_tool_name_maps(tools: Option<&[Tool]>) -> (HashMap<String, String>, HashMap<String, String>) {
+    let mut original_to_openai: HashMap<String, String> = HashMap::new();
+    let mut openai_to_original: HashMap<String, String> = HashMap::new();
+    let mut used: HashSet<String> = HashSet::new();
+
+    let Some(ts) = tools else {
+        return (original_to_openai, openai_to_original);
+    };
+
+    for tool in ts {
+        let original = tool.function.name.clone();
+
+        // Generate a valid, unique OpenAI tool name (OpenAI rejects names containing ':' and other chars).
+        let mut attempt: u32 = 0;
+        let openai_name = loop {
+            let candidate = openai_safe_tool_name(&original, attempt);
+            if used.insert(candidate.clone()) {
+                break candidate;
+            }
+            attempt = attempt.saturating_add(1);
+        };
+
+        original_to_openai.insert(original.clone(), openai_name.clone());
+        openai_to_original.insert(openai_name, original);
+    }
+
+    (original_to_openai, openai_to_original)
 }
 
 /// Returns true if the model is an o-series reasoning model (o1, o3, o4, etc.)
@@ -376,6 +471,8 @@ impl LlmClient {
 
         let url = format!("{}/chat/completions", self.config.effective_base_url());
 
+        let (tool_name_to_openai, openai_to_tool_name) = openai_tool_name_maps(tools);
+
         // Convert messages to OpenAI format
         let openai_messages: Vec<OpenAiMessage> = messages
             .iter()
@@ -394,7 +491,10 @@ impl LlmClient {
                             id: tc.id.clone(),
                             call_type: "function".to_string(),
                             function: OpenAiFunctionCall {
-                                name: tc.function.name.clone(),
+                                name: tool_name_to_openai
+                                    .get(&tc.function.name)
+                                    .cloned()
+                                    .unwrap_or_else(|| openai_safe_tool_name(&tc.function.name, 0)),
                                 arguments: tc.function.arguments.clone(),
                             },
                         })
@@ -410,7 +510,10 @@ impl LlmClient {
                 .map(|t| OpenAiTool {
                     tool_type: "function".to_string(),
                     function: OpenAiFunction {
-                        name: t.function.name.clone(),
+                        name: tool_name_to_openai
+                            .get(&t.function.name)
+                            .cloned()
+                            .unwrap_or_else(|| openai_safe_tool_name(&t.function.name, 0)),
                         description: t.function.description.clone(),
                         parameters: serde_json::to_value(&t.function.parameters)
                             .unwrap_or(serde_json::json!({})),
@@ -487,13 +590,26 @@ impl LlmClient {
             .tool_calls
             .unwrap_or_default()
             .into_iter()
-            .map(|tc| ToolCall {
-                id: tc.id,
-                call_type: tc.call_type,
-                function: super::types::FunctionCall {
-                    name: tc.function.name,
-                    arguments: tc.function.arguments,
-                },
+            .map(|tc| {
+                let OpenAiToolCall {
+                    id,
+                    call_type,
+                    function: OpenAiFunctionCall { name, arguments },
+                } = tc;
+
+                let original_name = match openai_to_tool_name.get(&name) {
+                    Some(v) => v.clone(),
+                    None => name,
+                };
+
+                ToolCall {
+                    id,
+                    call_type,
+                    function: super::types::FunctionCall {
+                        name: original_name,
+                        arguments,
+                    },
+                }
             })
             .collect();
 
@@ -528,6 +644,8 @@ impl LlmClient {
 
         let url = format!("{}/chat/completions", self.config.effective_base_url());
 
+        let (tool_name_to_openai, openai_to_tool_name) = openai_tool_name_maps(tools);
+
         // Convert messages to OpenAI format (OpenRouter is OpenAI-compatible)
         let openai_messages: Vec<OpenAiMessage> = messages
             .iter()
@@ -546,7 +664,10 @@ impl LlmClient {
                             id: tc.id.clone(),
                             call_type: "function".to_string(),
                             function: OpenAiFunctionCall {
-                                name: tc.function.name.clone(),
+                                name: tool_name_to_openai
+                                    .get(&tc.function.name)
+                                    .cloned()
+                                    .unwrap_or_else(|| openai_safe_tool_name(&tc.function.name, 0)),
                                 arguments: tc.function.arguments.clone(),
                             },
                         })
@@ -562,7 +683,10 @@ impl LlmClient {
                 .map(|t| OpenAiTool {
                     tool_type: "function".to_string(),
                     function: OpenAiFunction {
-                        name: t.function.name.clone(),
+                        name: tool_name_to_openai
+                            .get(&t.function.name)
+                            .cloned()
+                            .unwrap_or_else(|| openai_safe_tool_name(&t.function.name, 0)),
                         description: t.function.description.clone(),
                         parameters: serde_json::to_value(&t.function.parameters)
                             .unwrap_or(serde_json::json!({})),
@@ -641,13 +765,26 @@ impl LlmClient {
             .tool_calls
             .unwrap_or_default()
             .into_iter()
-            .map(|tc| ToolCall {
-                id: tc.id,
-                call_type: tc.call_type,
-                function: super::types::FunctionCall {
-                    name: tc.function.name,
-                    arguments: tc.function.arguments,
-                },
+            .map(|tc| {
+                let OpenAiToolCall {
+                    id,
+                    call_type,
+                    function: OpenAiFunctionCall { name, arguments },
+                } = tc;
+
+                let original_name = match openai_to_tool_name.get(&name) {
+                    Some(v) => v.clone(),
+                    None => name,
+                };
+
+                ToolCall {
+                    id,
+                    call_type,
+                    function: super::types::FunctionCall {
+                        name: original_name,
+                        arguments,
+                    },
+                }
             })
             .collect();
 
@@ -1274,5 +1411,49 @@ mod tests {
 
         let error: ClaudeError = serde_json::from_str(json).unwrap();
         assert_eq!(error.error.message, "Invalid API key");
+    }
+
+    #[test]
+    fn test_openai_tool_name_sanitization() {
+        let original = "test-ext:greet";
+        let safe = openai_safe_tool_name(original, 0);
+        assert!(is_openai_tool_name_valid(&safe));
+        assert_ne!(safe, original);
+        assert!(safe.contains("test-ext_greet"));
+        assert!(safe.len() <= OPENAI_TOOL_NAME_MAX_LEN);
+    }
+
+    #[test]
+    fn test_openai_tool_name_maps_roundtrip() {
+        let tools = vec![
+            Tool::new(
+                "read_file",
+                "Read file",
+                super::super::types::JsonSchema {
+                    schema_type: "object".to_string(),
+                    properties: None,
+                    required: None,
+                },
+            ),
+            Tool::new(
+                "my-ext:do thing",
+                "Does a thing",
+                super::super::types::JsonSchema {
+                    schema_type: "object".to_string(),
+                    properties: None,
+                    required: None,
+                },
+            ),
+        ];
+
+        let (to_openai, to_original) = openai_tool_name_maps(Some(&tools));
+
+        let read_safe = to_openai.get("read_file").unwrap();
+        assert_eq!(read_safe, "read_file");
+
+        let ext_original = "my-ext:do thing".to_string();
+        let ext_safe = to_openai.get(&ext_original).unwrap();
+        assert!(is_openai_tool_name_valid(ext_safe));
+        assert_eq!(to_original.get(ext_safe).unwrap(), &ext_original);
     }
 }
