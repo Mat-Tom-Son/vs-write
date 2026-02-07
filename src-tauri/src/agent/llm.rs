@@ -10,7 +10,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
-use super::types::{AgentConfig, AgentError, LlmProvider, Message, MessageRole, Tool, ToolCall, Usage};
+use super::types::{
+    AgentConfig, AgentError, LlmProvider, Message, MessageRole, Tool, ToolCall, Usage,
+};
 
 // ============================================================================
 // Common Response Type
@@ -152,7 +154,11 @@ fn openai_content_to_text(content: Option<Value>) -> Option<String> {
                     }
                 }
             }
-            if combined.is_empty() { None } else { Some(combined) }
+            if combined.is_empty() {
+                None
+            } else {
+                Some(combined)
+            }
         }
         _ => None,
     }
@@ -223,7 +229,9 @@ fn openai_safe_tool_name(original: &str, attempt: u32) -> String {
     candidate
 }
 
-fn openai_tool_name_maps(tools: Option<&[Tool]>) -> (HashMap<String, String>, HashMap<String, String>) {
+fn openai_tool_name_maps(
+    tools: Option<&[Tool]>,
+) -> (HashMap<String, String>, HashMap<String, String>) {
     let mut original_to_openai: HashMap<String, String> = HashMap::new();
     let mut openai_to_original: HashMap<String, String> = HashMap::new();
     let mut used: HashSet<String> = HashSet::new();
@@ -523,7 +531,8 @@ impl LlmClient {
         });
 
         // Determine which max tokens parameter to use based on model
-        let (max_tokens, max_completion_tokens) = if uses_max_completion_tokens(&self.config.model) {
+        let (max_tokens, max_completion_tokens) = if uses_max_completion_tokens(&self.config.model)
+        {
             (None, Some(self.config.max_tokens))
         } else {
             (Some(self.config.max_tokens), None)
@@ -558,7 +567,10 @@ impl LlmClient {
         let status = response.status();
 
         if !status.is_success() {
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
 
             if let Ok(api_error) = serde_json::from_str::<OpenAiError>(&error_text) {
                 return Err(AgentError::LlmError(format!(
@@ -696,7 +708,8 @@ impl LlmClient {
         });
 
         // Determine which max tokens parameter to use based on model
-        let (max_tokens, max_completion_tokens) = if uses_max_completion_tokens(&self.config.model) {
+        let (max_tokens, max_completion_tokens) = if uses_max_completion_tokens(&self.config.model)
+        {
             (None, Some(self.config.max_tokens))
         } else {
             (Some(self.config.max_tokens), None)
@@ -733,7 +746,10 @@ impl LlmClient {
         let status = response.status();
 
         if !status.is_success() {
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
 
             if let Ok(api_error) = serde_json::from_str::<OpenAiError>(&error_text) {
                 return Err(AgentError::LlmError(format!(
@@ -748,16 +764,14 @@ impl LlmClient {
             )));
         }
 
-        let openai_response: OpenAiResponse = response
-            .json()
-            .await
-            .map_err(|e| AgentError::LlmError(format!("Failed to parse OpenRouter response: {}", e)))?;
+        let openai_response: OpenAiResponse = response.json().await.map_err(|e| {
+            AgentError::LlmError(format!("Failed to parse OpenRouter response: {}", e))
+        })?;
 
-        let choice = openai_response
-            .choices
-            .into_iter()
-            .next()
-            .ok_or_else(|| AgentError::LlmError("No choices in OpenRouter response".to_string()))?;
+        let choice =
+            openai_response.choices.into_iter().next().ok_or_else(|| {
+                AgentError::LlmError("No choices in OpenRouter response".to_string())
+            })?;
 
         // Convert tool calls
         let tool_calls = choice
@@ -921,7 +935,10 @@ impl LlmClient {
         let status = response.status();
 
         if !status.is_success() {
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
 
             if let Ok(api_error) = serde_json::from_str::<ClaudeError>(&error_text) {
                 return Err(AgentError::LlmError(format!(
@@ -1029,7 +1046,10 @@ impl LlmClient {
         let status = response.status();
 
         if !status.is_success() {
-            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(AgentError::LlmError(format!(
                 "Ollama request failed ({}): {}",
                 status, error_text
@@ -1042,7 +1062,10 @@ impl LlmClient {
             .map_err(|e| AgentError::LlmError(format!("Failed to parse Ollama response: {}", e)))?;
 
         // Ollama doesn't return tool calls
-        let usage = match (ollama_response.prompt_eval_count, ollama_response.eval_count) {
+        let usage = match (
+            ollama_response.prompt_eval_count,
+            ollama_response.eval_count,
+        ) {
             (Some(prompt), Some(completion)) => Some(Usage {
                 prompt_tokens: prompt,
                 completion_tokens: completion,

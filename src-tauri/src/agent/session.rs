@@ -245,7 +245,7 @@ impl SessionStore {
         SessionStore {
             sessions: RwLock::new(HashMap::new()),
             audit_log: RwLock::new(Vec::new()),
-            max_sessions: 100,      // Keep last 100 sessions
+            max_sessions: 100,       // Keep last 100 sessions
             max_audit_entries: 1000, // Keep last 1000 audit entries
         }
     }
@@ -260,14 +260,7 @@ impl SessionStore {
         task: String,
     ) -> String {
         let id = uuid::Uuid::new_v4().to_string();
-        let session = Session::new(
-            id.clone(),
-            workspace,
-            provider,
-            model,
-            approval_mode,
-            task,
-        );
+        let session = Session::new(id.clone(), workspace, provider, model, approval_mode, task);
 
         // Add session
         {
@@ -350,7 +343,8 @@ impl SessionStore {
         success: bool,
         duration_ms: u64,
     ) {
-        let entry = AuditEntry::tool_call(session_id, tool_name, args, result, success, duration_ms);
+        let entry =
+            AuditEntry::tool_call(session_id, tool_name, args, result, success, duration_ms);
         self.log_entry(entry);
 
         // Update session tool count
@@ -424,8 +418,14 @@ fn redact_sensitive(s: String) -> String {
     let patterns: &[(&str, &str)] = &[
         (r"sk-[a-zA-Z0-9]{20,}", "[REDACTED_API_KEY]"),
         (r"sk-ant-[a-zA-Z0-9\-]{20,}", "[REDACTED_API_KEY]"),
-        (r#"password["']?\s*[:=]\s*["'][^"']+["']"#, "password: [REDACTED]"),
-        (r#"secret["']?\s*[:=]\s*["'][^"']+["']"#, "secret: [REDACTED]"),
+        (
+            r#"password["']?\s*[:=]\s*["'][^"']+["']"#,
+            "password: [REDACTED]",
+        ),
+        (
+            r#"secret["']?\s*[:=]\s*["'][^"']+["']"#,
+            "secret: [REDACTED]",
+        ),
     ];
 
     let mut result = s;

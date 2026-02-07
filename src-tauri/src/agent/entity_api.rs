@@ -236,7 +236,11 @@ impl EntityStore {
             let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
             let path = entry.path();
 
-            if path.extension().map(|e| e == "yaml" || e == "yml").unwrap_or(false) {
+            if path
+                .extension()
+                .map(|e| e == "yaml" || e == "yml")
+                .unwrap_or(false)
+            {
                 if let Ok(entity) = self.read_entity_file(&path) {
                     if entity.id == entity_id {
                         return Ok(Some(entity.into()));
@@ -263,7 +267,11 @@ impl EntityStore {
             let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
             let path = entry.path();
 
-            if path.extension().map(|e| e == "yaml" || e == "yml").unwrap_or(false) {
+            if path
+                .extension()
+                .map(|e| e == "yaml" || e == "yml")
+                .unwrap_or(false)
+            {
                 if let Ok(entity) = self.read_entity_file(&path) {
                     let type_str = format!("{:?}", entity.entity_type).to_lowercase();
                     if type_str == entity_type.to_lowercase() {
@@ -291,7 +299,11 @@ impl EntityStore {
             let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
             let path = entry.path();
 
-            if path.extension().map(|e| e == "yaml" || e == "yml").unwrap_or(false) {
+            if path
+                .extension()
+                .map(|e| e == "yaml" || e == "yml")
+                .unwrap_or(false)
+            {
                 if let Ok(entity) = self.read_entity_file(&path) {
                     results.push(entity.into());
                 }
@@ -311,7 +323,9 @@ impl EntityStore {
             .filter(|e| {
                 e.name.to_lowercase().contains(&query_lower)
                     || e.description.to_lowercase().contains(&query_lower)
-                    || e.aliases.iter().any(|a| a.to_lowercase().contains(&query_lower))
+                    || e.aliases
+                        .iter()
+                        .any(|a| a.to_lowercase().contains(&query_lower))
             })
             .collect();
 
@@ -347,7 +361,11 @@ impl EntityStore {
 
     /// Update an existing entity
     #[allow(dead_code)]
-    pub fn update_entity(&self, entity_id: &str, updates: serde_json::Value) -> Result<Entity, String> {
+    pub fn update_entity(
+        &self,
+        entity_id: &str,
+        updates: serde_json::Value,
+    ) -> Result<Entity, String> {
         let existing = self
             .get_entity(entity_id)?
             .ok_or_else(|| format!("Entity {} not found", entity_id))?;
@@ -382,7 +400,8 @@ impl EntityStore {
     pub fn delete_entity(&self, entity_id: &str) -> Result<bool, String> {
         match self.find_entity_file(entity_id) {
             Ok(path) => {
-                fs::remove_file(&path).map_err(|e| format!("Failed to delete entity file: {}", e))?;
+                fs::remove_file(&path)
+                    .map_err(|e| format!("Failed to delete entity file: {}", e))?;
                 Ok(true)
             }
             Err(_) => Ok(false),
@@ -544,7 +563,11 @@ impl EntityStore {
             let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
             let path = entry.path();
 
-            if path.extension().map(|e| e == "yaml" || e == "yml").unwrap_or(false) {
+            if path
+                .extension()
+                .map(|e| e == "yaml" || e == "yml")
+                .unwrap_or(false)
+            {
                 if let Ok(entity) = self.read_entity_file(&path) {
                     if entity.id == entity_id {
                         return Ok(path);
@@ -556,7 +579,10 @@ impl EntityStore {
         Err(format!("Entity {} not found", entity_id))
     }
 
-    fn read_section(&self, section_id: &str) -> Result<(PathBuf, SectionFrontmatter, String), String> {
+    fn read_section(
+        &self,
+        section_id: &str,
+    ) -> Result<(PathBuf, SectionFrontmatter, String), String> {
         let sections_dir = self.workspace.join("sections");
         if !sections_dir.exists() {
             return Err(format!("Section {} not found", section_id));
@@ -733,11 +759,7 @@ description: "Established in chapter 1"
 aliases:
   - "sacrifice rule"
 "#;
-        fs::write(
-            dir.path().join("entities").join("alice.yaml"),
-            entity_yaml,
-        )
-        .unwrap();
+        fs::write(dir.path().join("entities").join("alice.yaml"), entity_yaml).unwrap();
 
         // Create sections directory
         fs::create_dir(dir.path().join("sections")).unwrap();

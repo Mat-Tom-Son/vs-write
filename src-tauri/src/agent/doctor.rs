@@ -114,9 +114,18 @@ pub fn run_health_check(
     check_environment(&mut issues);
 
     // Calculate summary
-    let errors = issues.iter().filter(|i| i.severity == IssueSeverity::Error).count();
-    let warnings = issues.iter().filter(|i| i.severity == IssueSeverity::Warning).count();
-    let info = issues.iter().filter(|i| i.severity == IssueSeverity::Info).count();
+    let errors = issues
+        .iter()
+        .filter(|i| i.severity == IssueSeverity::Error)
+        .count();
+    let warnings = issues
+        .iter()
+        .filter(|i| i.severity == IssueSeverity::Warning)
+        .count();
+    let info = issues
+        .iter()
+        .filter(|i| i.severity == IssueSeverity::Info)
+        .count();
 
     HealthReport {
         healthy: errors == 0,
@@ -188,7 +197,11 @@ fn check_extensions(extensions: &ExtensionRegistry, issues: &mut Vec<HealthIssue
     issues.push(HealthIssue::new(
         IssueSeverity::Info,
         IssueCategory::Extensions,
-        format!("{} extension(s) loaded: {}", loaded.len(), loaded.join(", ")),
+        format!(
+            "{} extension(s) loaded: {}",
+            loaded.len(),
+            loaded.join(", ")
+        ),
         "Review extensions in Settings to ensure they're from trusted sources",
     ));
 
@@ -200,7 +213,7 @@ fn check_extensions(extensions: &ExtensionRegistry, issues: &mut Vec<HealthIssue
 
     for (ext_id, manifest_path) in manifest_paths {
         match crate::extensions::verify_extension_signature(
-            manifest_path.to_string_lossy().to_string()
+            manifest_path.to_string_lossy().to_string(),
         ) {
             Ok(verification) => {
                 if !verification.is_signed {
@@ -227,7 +240,9 @@ fn check_extensions(extensions: &ExtensionRegistry, issues: &mut Vec<HealthIssue
                         format!(
                             "Extension '{}' is signed by untrusted publisher: {}",
                             ext_id,
-                            verification.publisher_id.unwrap_or_else(|| "unknown".to_string())
+                            verification
+                                .publisher_id
+                                .unwrap_or_else(|| "unknown".to_string())
                         ),
                         "Verify you trust this publisher before using the extension",
                     ));
@@ -239,7 +254,9 @@ fn check_extensions(extensions: &ExtensionRegistry, issues: &mut Vec<HealthIssue
                         format!(
                             "Extension '{}' verified (publisher: {})",
                             ext_id,
-                            verification.publisher_id.unwrap_or_else(|| "unknown".to_string())
+                            verification
+                                .publisher_id
+                                .unwrap_or_else(|| "unknown".to_string())
                         ),
                         "This extension is signed by a trusted publisher",
                     ));

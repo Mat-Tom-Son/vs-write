@@ -30,8 +30,9 @@ impl ToolRisk {
     pub fn for_tool(tool_name: &str) -> Self {
         // Extract the base tool name (strip extension prefix if present)
         let base_name = if tool_name.contains(':') {
-            // Extension tool - default to Medium unless we have metadata
-            return ToolRisk::Medium;
+            // Extension tools can execute arbitrary logic (including shell/file ops),
+            // so default to High unless explicit per-tool risk metadata is added later.
+            return ToolRisk::High;
         } else {
             tool_name
         };
@@ -170,9 +171,14 @@ impl ToolResult {
 
     /// Create an error result
     pub fn error(tool_call_id: &str, error: String) -> Self {
+        let output = if error.starts_with("ERROR:") {
+            error
+        } else {
+            format!("ERROR: {}", error)
+        };
         ToolResult {
             tool_call_id: tool_call_id.to_string(),
-            output: format!("ERROR: {}", error),
+            output,
             success: false,
             truncated: None,
         }
@@ -600,15 +606,27 @@ mod tests {
     fn test_llm_provider_defaults() {
         assert_eq!(LlmProvider::default(), LlmProvider::OpenAI);
         assert_eq!(LlmProvider::OpenAI.default_model(), "gpt-5-mini");
-        assert_eq!(LlmProvider::Claude.default_model(), "claude-sonnet-4-20250514");
+        assert_eq!(
+            LlmProvider::Claude.default_model(),
+            "claude-sonnet-4-20250514"
+        );
         assert_eq!(LlmProvider::Ollama.default_model(), "llama3.2");
     }
 
     #[test]
     fn test_llm_provider_base_urls() {
-        assert_eq!(LlmProvider::OpenAI.default_base_url(), "https://api.openai.com/v1");
-        assert_eq!(LlmProvider::Claude.default_base_url(), "https://api.anthropic.com/v1");
-        assert_eq!(LlmProvider::Ollama.default_base_url(), "http://localhost:11434");
+        assert_eq!(
+            LlmProvider::OpenAI.default_base_url(),
+            "https://api.openai.com/v1"
+        );
+        assert_eq!(
+            LlmProvider::Claude.default_base_url(),
+            "https://api.anthropic.com/v1"
+        );
+        assert_eq!(
+            LlmProvider::Ollama.default_base_url(),
+            "http://localhost:11434"
+        );
     }
 
     #[test]
@@ -697,6 +715,14 @@ mod tests {
         let error = ToolResult::error("call-2", "file not found".to_string());
         assert!(!error.success);
         assert!(error.output.starts_with("ERROR:"));
+
+        let already_prefixed = ToolResult::error("call-3", "ERROR: boom".to_string());
+        assert_eq!(already_prefixed.output, "ERROR: boom");
+    }
+
+    #[test]
+    fn test_extension_tool_risk_is_high() {
+        assert_eq!(ToolRisk::for_tool("my-ext:dangerous_tool"), ToolRisk::High);
     }
 
     #[test]

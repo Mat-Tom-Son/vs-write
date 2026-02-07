@@ -12,8 +12,10 @@ use tokio_util::sync::CancellationToken;
 
 use crate::agent::credentials::{CredentialManager, ProviderStatus, SharedCredentialManager};
 use crate::agent::lua_extensions::{ExtensionRegistry, HookResult, LifecycleHook};
-use crate::agent::session::{Session, SharedSessionStore, AuditEntry};
-use crate::agent::{self, AgentConfig, AgentEvent, LlmProvider, Message, MessageRole, ToolApprovalStore};
+use crate::agent::session::{AuditEntry, Session, SharedSessionStore};
+use crate::agent::{
+    self, AgentConfig, AgentEvent, LlmProvider, Message, MessageRole, ToolApprovalStore,
+};
 
 /// Protocol version for the native agent API
 pub const PROTOCOL_VERSION: &str = "1.1.0";
@@ -27,6 +29,29 @@ pub type SharedExtensionRegistry = Arc<RwLock<ExtensionRegistry>>;
 
 /// Running agent tasks that can be cancelled
 pub type RunningTasks = Arc<RwLock<HashMap<String, CancellationToken>>>;
+
+/// Removes a run from the running-task map when it goes out of scope.
+struct RunningTaskGuard {
+    running_tasks: RunningTasks,
+    run_id: String,
+}
+
+impl RunningTaskGuard {
+    fn new(running_tasks: RunningTasks, run_id: String) -> Self {
+        Self {
+            running_tasks,
+            run_id,
+        }
+    }
+}
+
+impl Drop for RunningTaskGuard {
+    fn drop(&mut self) {
+        if let Ok(mut tasks) = self.running_tasks.write() {
+            tasks.remove(&self.run_id);
+        }
+    }
+}
 
 // ============================================================================
 // Command Types
@@ -158,12 +183,12 @@ impl InputConfig {
             key
         } else {
             // Fall back to environment variable via CredentialManager
-            credentials
-                .get_key(self.provider)
-                .ok_or_else(|| format!(
+            credentials.get_key(self.provider).ok_or_else(|| {
+                format!(
                     "No API key configured for provider {:?}. Please set your API key in Settings.",
                     self.provider
-                ))?
+                )
+            })?
         };
 
         Ok(AgentConfig {
@@ -242,9 +267,9 @@ pub async fn run_native_agent(
         return Err(format!("Workspace path is not a directory: {}", workspace));
     }
     // Ensure workspace path is absolute to prevent traversal tricks
-    let workspace_path = workspace_path.canonicalize().map_err(|e| {
-        format!("Failed to resolve workspace path: {}", e)
-    })?;
+    let workspace_path = workspace_path
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve workspace path: {}", e))?;
 
     // Rate limiting: check concurrent run count before allowing new runs
     {
@@ -281,6 +306,7 @@ pub async fn run_native_agent(
 
         tasks.insert(run_id.clone(), cancel_token.clone());
     }
+    let _task_guard = RunningTaskGuard::new(running_tasks.inner().clone(), run_id.clone());
 
     // Convert inputs - use CredentialManager for API key
     let agent_config: AgentConfig = config.into_agent_config(&credentials)?;
@@ -298,7 +324,9 @@ pub async fn run_native_agent(
 
     // Get extension registry for the agent (read access is sufficient)
     let ext_registry = {
-        let registry = extensions.read().map_err(|e| format!("Failed to read extension registry: {}", e))?;
+        let registry = extensions
+            .read()
+            .map_err(|e| format!("Failed to read extension registry: {}", e))?;
         // Clone the registry data into an Arc for the agent
         Arc::new(registry.clone())
     };
@@ -316,11 +344,6 @@ pub async fn run_native_agent(
         }
     });
 
-    // Run the agent with extensions
-    // Clone run_id and running_tasks for cleanup
-    let run_id_cleanup = run_id.clone();
-    let running_tasks_inner = running_tasks.inner().clone();
-
     // Run the agent with extensions and cancellation support
     let result = agent::run_agent(
         &task,
@@ -334,13 +357,6 @@ pub async fn run_native_agent(
         Some(cancel_token),
     )
     .await;
-
-    // Clean up the task from running tasks
-    {
-        if let Ok(mut tasks) = running_tasks_inner.write() {
-            tasks.remove(&run_id_cleanup);
-        }
-    }
 
     // Clone session store and session_id for result handling
     let session_store_inner = session_store.inner().clone();
@@ -433,9 +449,7 @@ pub fn cancel_agent_task(
 
 /// List running agent tasks
 #[tauri::command]
-pub fn list_running_tasks(
-    running_tasks: State<'_, RunningTasks>,
-) -> Result<Vec<String>, String> {
+pub fn list_running_tasks(running_tasks: State<'_, RunningTasks>) -> Result<Vec<String>, String> {
     let tasks = running_tasks
         .read()
         .map_err(|e| format!("Failed to read running tasks: {}", e))?;
@@ -531,7 +545,11 @@ pub fn load_lua_extension(
         serde_json::from_str(&manifest_content)
             .map_err(|e| format!("Failed to parse manifest: {}", e))?;
 
-    let lua_tool_count = manifest.tools.iter().filter(|t| t.lua_script.is_some()).count();
+    let lua_tool_count = manifest
+        .tools
+        .iter()
+        .filter(|t| t.lua_script.is_some())
+        .count();
 
     Ok(ExtensionInfo {
         id: manifest.id,
@@ -564,7 +582,11 @@ pub fn list_lua_extensions(
         .read()
         .map_err(|e| format!("Failed to read extension registry: {}", e))?;
 
-    Ok(registry.list_extensions().into_iter().map(|s| s.to_string()).collect())
+    Ok(registry
+        .list_extensions()
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect())
 }
 
 /// Get tools from all loaded extensions
@@ -666,7 +688,10 @@ pub fn get_extension_hooks(
         .map_err(|e| format!("Failed to read extension registry: {}", e))?;
 
     let hooks = registry.get_enabled_hooks(&extension_id);
-    Ok(hooks.iter().map(|h| h.function_name().to_string()).collect())
+    Ok(hooks
+        .iter()
+        .map(|h| h.function_name().to_string())
+        .collect())
 }
 
 // ============================================================================
@@ -683,7 +708,10 @@ pub fn run_agent_health_check(
         .read()
         .map_err(|e| format!("Failed to read extension registry: {}", e))?;
 
-    Ok(crate::agent::doctor::run_health_check(&credentials, &registry))
+    Ok(crate::agent::doctor::run_health_check(
+        &credentials,
+        &registry,
+    ))
 }
 
 // ============================================================================

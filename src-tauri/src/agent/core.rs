@@ -131,7 +131,11 @@ pub async fn run_agent(
             }
         }
 
-        log::info!("Agent iteration {}/{}", iteration + 1, config.max_iterations);
+        log::info!(
+            "Agent iteration {}/{}",
+            iteration + 1,
+            config.max_iterations
+        );
 
         // Call LLM
         let response: LlmResponse = client.chat(&conversation, Some(&tools)).await?;
@@ -165,10 +169,11 @@ pub async fn run_agent(
                 let tool_args_str = &tool_call.function.arguments;
 
                 // Parse arguments
-                let args: serde_json::Value = serde_json::from_str(tool_args_str).unwrap_or_else(|e| {
-                    log::warn!("Failed to parse tool arguments: {}", e);
-                    serde_json::json!({})
-                });
+                let args: serde_json::Value =
+                    serde_json::from_str(tool_args_str).unwrap_or_else(|e| {
+                        log::warn!("Failed to parse tool arguments: {}", e);
+                        serde_json::json!({})
+                    });
 
                 // Check for cancellation before each tool call
                 if let Some(ref token) = cancel_token {
@@ -290,7 +295,8 @@ pub async fn run_agent(
                     };
 
                     if !approved {
-                        let denial = "DENIED: Tool execution was blocked by user approval.".to_string();
+                        let denial =
+                            "DENIED: Tool execution was blocked by user approval.".to_string();
 
                         // Emit a completion event so the UI can display the outcome.
                         if let Some(ref tx) = event_tx {
@@ -433,7 +439,18 @@ pub async fn run_simple(
     workspace: &Path,
     config: AgentConfig,
 ) -> Result<String, AgentError> {
-    let result = run_agent(task, system_prompt, vec![], workspace, config, None, None, None, None).await?;
+    let result = run_agent(
+        task,
+        system_prompt,
+        vec![],
+        workspace,
+        config,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await?;
     Ok(result.response)
 }
 

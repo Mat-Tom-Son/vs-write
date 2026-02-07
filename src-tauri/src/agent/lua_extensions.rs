@@ -138,7 +138,7 @@ pub struct LoadedExtension {
     #[allow(dead_code)]
     pub directory: PathBuf,
     pub scripts: HashMap<String, String>, // tool_name -> script content
-    pub hooks_script: Option<String>,      // hooks.lua content if present
+    pub hooks_script: Option<String>,     // hooks.lua content if present
 }
 
 /// Registry of loaded extensions and their tools
@@ -269,10 +269,7 @@ impl ExtensionRegistry {
                 let full_name = format!("{}:{}", ext_id, tool_def.name);
 
                 // Build parameters schema - check both 'parameters' and 'schema' fields
-                let schema_value = tool_def
-                    .parameters
-                    .as_ref()
-                    .or(tool_def.schema.as_ref());
+                let schema_value = tool_def.parameters.as_ref().or(tool_def.schema.as_ref());
 
                 let parameters = if let Some(params) = schema_value {
                     // Use provided schema
@@ -326,10 +323,12 @@ impl ExtensionRegistry {
             .get(ext_id)
             .ok_or_else(|| format!("Extension '{}' not found", ext_id))?;
 
-        let script = extension
-            .scripts
-            .get(local_tool_name)
-            .ok_or_else(|| format!("Tool '{}' not found in extension '{}'", local_tool_name, ext_id))?;
+        let script = extension.scripts.get(local_tool_name).ok_or_else(|| {
+            format!(
+                "Tool '{}' not found in extension '{}'",
+                local_tool_name, ext_id
+            )
+        })?;
 
         let tool_def = extension
             .manifest
@@ -347,8 +346,8 @@ impl ExtensionRegistry {
 
         // Create Lua runtime
         let ctx = LuaContext::new(workspace, shell_timeout);
-        let lua = create_lua_runtime(&ctx)
-            .map_err(|e| format!("Failed to create Lua runtime: {}", e))?;
+        let lua =
+            create_lua_runtime(&ctx).map_err(|e| format!("Failed to create Lua runtime: {}", e))?;
 
         // Execute the tool function
         call_function(&lua, script, function_name, args.clone())
@@ -396,8 +395,8 @@ impl ExtensionRegistry {
 
         // Create Lua runtime
         let ctx = LuaContext::new(workspace, shell_timeout);
-        let lua = create_lua_runtime(&ctx)
-            .map_err(|e| format!("Failed to create Lua runtime: {}", e))?;
+        let lua =
+            create_lua_runtime(&ctx).map_err(|e| format!("Failed to create Lua runtime: {}", e))?;
 
         // Execute the hook function
         let function_name = hook.function_name();

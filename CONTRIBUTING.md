@@ -23,7 +23,8 @@ Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md). We are committ
 
 - **Node.js** 18+ and npm 9+
 - **Rust** 1.77+ (install via [rustup](https://rustup.rs/))
-- **Python** 3.11+ (for the backend agent)
+
+The repository includes `rust-toolchain.toml`, which ensures required Rust components (`rustfmt`, `clippy`) are available.
 
 ### Installation
 
@@ -38,14 +39,7 @@ Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md). We are committ
    npm install
    ```
 
-3. **Install Python dependencies**
-   ```bash
-   cd open-agent
-   pip install -e .
-   cd ..
-   ```
-
-4. **Run in development mode**
+3. **Run in development mode**
    ```bash
    npm run tauri:dev
    ```
@@ -53,7 +47,6 @@ Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md). We are committ
 This will start:
 - Vite dev server for hot-reloading
 - Tauri application with the Rust backend
-- Python agent server (auto-started by Tauri)
 
 ### Quick Commands
 
@@ -64,6 +57,9 @@ This will start:
 | `npm run build` | Build web assets |
 | `npm run tauri:build` | Build production desktop app |
 | `npm run lint` | Run ESLint |
+| `npm run rust:fmt` | Format Rust code |
+| `npm run rust:test` | Run Rust tests |
+| `npm run rust:clippy` | Run Rust lints |
 | `npx tsc --noEmit` | TypeScript type checking |
 
 ## Project Structure
@@ -82,11 +78,8 @@ vs-write/
 │   │   │   ├── llm.rs     # LLM providers
 │   │   │   ├── tools.rs   # Tool implementations
 │   │   │   └── lua_*.rs   # Lua extension system
-│   │   ├── lib.rs         # Tauri app entry
-│   │   └── backend.rs     # Python backend management
+│   │   └── lib.rs         # Tauri app entry
 │   └── Cargo.toml
-├── open-agent/            # Python agent (backend)
-│   └── src/local_agent/
 ├── examples/              # Extension examples
 └── docs/                  # Documentation
 ```
@@ -116,11 +109,10 @@ npx tsc --noEmit
 # Lint
 npm run lint
 
-# Rust tests
-cd src-tauri && cargo test
-
-# Python tests
-cd open-agent && pytest tests/
+# Rust formatting + tests + linting
+npm run rust:fmt
+npm run rust:test
+npm run rust:clippy
 ```
 
 ### 4. Commit Your Changes
@@ -167,40 +159,24 @@ Push your branch and create a PR. Fill out the template with:
 
 ### Rust
 
-- Use **rustfmt** (run `cargo fmt`)
+- Use **rustfmt** (run `npm run rust:fmt` or `cargo fmt`)
 - Follow Rust naming conventions
 - Add doc comments for public APIs
 - Handle errors explicitly (no `unwrap()` in production code)
-
-### Python
-
-- Use **black** for formatting
-- Use **type hints**
-- Follow PEP 8
 
 ## Testing
 
 ### Frontend
 
-Currently, we need more frontend tests. Contributions welcome!
-
 ```bash
-# Run frontend tests (when available)
+# Run frontend tests
 npm test
 ```
 
 ### Rust
 
 ```bash
-cd src-tauri
-cargo test
-```
-
-### Python
-
-```bash
-cd open-agent
-pytest tests/ -v
+npm run rust:test
 ```
 
 ## Documentation

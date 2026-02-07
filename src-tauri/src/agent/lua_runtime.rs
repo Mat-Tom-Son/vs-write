@@ -115,12 +115,12 @@ fn create_tools_table(lua: &Lua, ctx: &LuaContext) -> LuaResult<Table> {
     let workspace = ctx.workspace.clone();
     tools_table.set(
         "delete_file",
-        lua.create_function(move |_, path: String| {
-            match tools::delete_file(&workspace, &path) {
+        lua.create_function(
+            move |_, path: String| match tools::delete_file(&workspace, &path) {
                 Ok(msg) => Ok(msg),
                 Err(e) => Err(mlua::Error::runtime(e)),
-            }
-        })?,
+            },
+        )?,
     )?;
 
     // append_file(path, content) -> string

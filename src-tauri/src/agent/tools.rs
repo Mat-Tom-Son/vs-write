@@ -71,21 +71,12 @@ const SENSITIVE_FILE_PATTERNS: &[&str] = &[
 ];
 
 /// Patterns for sensitive file extensions
-const SENSITIVE_EXTENSIONS: &[&str] = &[
-    ".pem",
-    ".key",
-    ".p12",
-    ".pfx",
-    ".keystore",
-    ".jks",
-];
+const SENSITIVE_EXTENSIONS: &[&str] = &[".pem", ".key", ".p12", ".pfx", ".keystore", ".jks"];
 
 /// Check if a path points to a sensitive file that should not be accessed
 fn is_sensitive_path(path: &Path) -> Option<String> {
     // Get the file name
-    let file_name = path.file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
+    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
     // Check against sensitive file patterns (case-insensitive)
     let file_name_lower = file_name.to_lowercase();
@@ -127,18 +118,28 @@ fn is_sensitive_path(path: &Path) -> Option<String> {
 /// This prevents TOCTOU vulnerabilities where symlink targets could change
 /// between validation and actual file operation.
 fn check_no_symlinks_in_path(path: &Path, workspace: &Path) -> Result<(), String> {
-    // Get the path relative to workspace to check each component
-    let relative = if path.starts_with(workspace) {
-        path.strip_prefix(workspace).unwrap_or(path)
-    } else {
-        // For absolute paths that don't start with workspace, check from root
-        path
-    };
+    // Check only the path components beneath the workspace root.
+    let relative = path.strip_prefix(workspace).map_err(|_| {
+        format!(
+            "Path '{}' is outside workspace '{}'",
+            path.display(),
+            workspace.display()
+        )
+    })?;
 
     // Check each component from workspace down to the target
     let mut current = workspace.to_path_buf();
     for component in relative.components() {
-        current.push(component);
+        match component {
+            std::path::Component::Normal(c) => current.push(c),
+            std::path::Component::CurDir => continue,
+            std::path::Component::ParentDir => {
+                return Err("Path traversal detected: '..' not allowed".to_string());
+            }
+            std::path::Component::RootDir | std::path::Component::Prefix(_) => {
+                return Err("Absolute paths not allowed".to_string());
+            }
+        }
 
         // Use symlink_metadata which doesn't follow symlinks
         // (unlike metadata() which does follow them)
@@ -166,6 +167,20 @@ fn check_no_symlinks_in_path(path: &Path, workspace: &Path) -> Result<(), String
     Ok(())
 }
 
+fn symlink_check_base<'a>(
+    path: &Path,
+    workspace: &'a Path,
+    canonical_workspace: &'a Path,
+) -> Option<&'a Path> {
+    if path.starts_with(workspace) {
+        Some(workspace)
+    } else if path.starts_with(canonical_workspace) {
+        Some(canonical_workspace)
+    } else {
+        None
+    }
+}
+
 /// Validate that a path is within the workspace and return the canonical path.
 /// This prevents directory traversal attacks and access outside the workspace.
 ///
@@ -190,15 +205,30 @@ pub fn safe_path(workspace: &Path, requested: &str) -> Result<PathBuf, String> {
         .canonicalize()
         .map_err(|e| format!("Failed to canonicalize workspace: {}", e))?;
 
-    // Security: Check for symlinks in the path to prevent TOCTOU attacks
-    // A symlink's target could change between our check and actual file operation
-    if requested.exists() {
-        check_no_symlinks_in_path(&requested, &canonical_workspace)?;
-    }
-
     // Security: Check for sensitive files that should never be accessed
     if let Some(error) = is_sensitive_path(&requested) {
         return Err(error);
+    }
+
+    // Security: Check for symlinks in the path to prevent TOCTOU attacks
+    // A symlink's target could change between our check and actual file operation
+    if let Some(base) = symlink_check_base(&requested, workspace, &canonical_workspace) {
+        if requested.exists() {
+            check_no_symlinks_in_path(&requested, base)?;
+        } else {
+            // For non-existing paths (e.g. writes), validate the first existing ancestor.
+            let mut ancestor = requested.as_path();
+            while !ancestor.exists() {
+                match ancestor.parent() {
+                    Some(parent) => ancestor = parent,
+                    None => break,
+                }
+            }
+
+            if ancestor.exists() && ancestor.starts_with(base) {
+                check_no_symlinks_in_path(ancestor, base)?;
+            }
+        }
     }
 
     // For paths that might not exist yet (write operations), we need to check parent
@@ -411,7 +441,9 @@ fn list_dir_schema() -> Tool {
         "path".to_string(),
         PropertySchema {
             prop_type: "string".to_string(),
-            description: Some("Directory path (relative to workspace, defaults to '.')".to_string()),
+            description: Some(
+                "Directory path (relative to workspace, defaults to '.')".to_string(),
+            ),
             default: Some(serde_json::json!(".")),
         },
     );
@@ -684,8 +716,7 @@ pub fn list_dir(workspace: &Path, path: &str) -> Result<String, String> {
     let mut result: Vec<String> = dirs;
     result.extend(files);
 
-    Ok(serde_json::to_string_pretty(&result)
-        .unwrap_or_else(|_| format!("{:?}", result)))
+    Ok(serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{:?}", result)))
 }
 
 /// Find files matching a glob pattern
@@ -733,8 +764,7 @@ pub fn glob_files(workspace: &Path, pattern: &str, base_path: &str) -> Result<St
         matches.push(format!("... and {} more files", total - 500));
     }
 
-    Ok(serde_json::to_string_pretty(&matches)
-        .unwrap_or_else(|_| format!("{:?}", matches)))
+    Ok(serde_json::to_string_pretty(&matches).unwrap_or_else(|_| format!("{:?}", matches)))
 }
 
 /// Search file contents for a pattern
@@ -836,9 +866,23 @@ pub fn grep_files(workspace: &Path, pattern: &str, path: &str) -> Result<String,
                         let ext = ext.to_string_lossy().to_lowercase();
                         if matches!(
                             ext.as_str(),
-                            "txt" | "md" | "rs" | "py" | "js" | "ts" | "tsx"
-                                | "jsx" | "json" | "yaml" | "yml" | "toml"
-                                | "html" | "css" | "scss" | "vue" | "svelte"
+                            "txt"
+                                | "md"
+                                | "rs"
+                                | "py"
+                                | "js"
+                                | "ts"
+                                | "tsx"
+                                | "jsx"
+                                | "json"
+                                | "yaml"
+                                | "yml"
+                                | "toml"
+                                | "html"
+                                | "css"
+                                | "scss"
+                                | "vue"
+                                | "svelte"
                         ) {
                             search_file(&path, pattern, workspace, results)?;
                         }
@@ -865,8 +909,7 @@ pub fn grep_files(workspace: &Path, pattern: &str, path: &str) -> Result<String,
         }));
     }
 
-    Ok(serde_json::to_string_pretty(&results)
-        .unwrap_or_else(|_| format!("{:?}", results)))
+    Ok(serde_json::to_string_pretty(&results).unwrap_or_else(|_| format!("{:?}", results)))
 }
 
 /// Execute a shell command
@@ -975,11 +1018,8 @@ pub fn run_shell(
 
                 if let Some(err) = stderr {
                     let reader = BufReader::new(err);
-                    let stderr_lines: Vec<String> = reader
-                        .lines()
-                        .take(100)
-                        .filter_map(|l| l.ok())
-                        .collect();
+                    let stderr_lines: Vec<String> =
+                        reader.lines().take(100).filter_map(|l| l.ok()).collect();
 
                     if !stderr_lines.is_empty() {
                         output.push_str("\n--- stderr ---\n");
@@ -1034,8 +1074,14 @@ pub fn dispatch_tool(
                 .get("path")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing 'path' parameter")?;
-            let offset = args.get("offset").and_then(|v| v.as_u64()).map(|v| v as usize);
-            let limit = args.get("limit").and_then(|v| v.as_u64()).map(|v| v as usize);
+            let offset = args
+                .get("offset")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize);
+            let limit = args
+                .get("limit")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize);
             read_file(workspace, path, offset, limit)
         }
 
@@ -1072,10 +1118,7 @@ pub fn dispatch_tool(
         }
 
         "list_dir" => {
-            let path = args
-                .get("path")
-                .and_then(|v| v.as_str())
-                .unwrap_or(".");
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
             list_dir(workspace, path)
         }
 
@@ -1084,10 +1127,7 @@ pub fn dispatch_tool(
                 .get("pattern")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing 'pattern' parameter")?;
-            let path = args
-                .get("path")
-                .and_then(|v| v.as_str())
-                .unwrap_or(".");
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
             glob_files(workspace, pattern, path)
         }
 
@@ -1096,10 +1136,7 @@ pub fn dispatch_tool(
                 .get("pattern")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing 'pattern' parameter")?;
-            let path = args
-                .get("path")
-                .and_then(|v| v.as_str())
-                .unwrap_or(".");
+            let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
             grep_files(workspace, pattern, path)
         }
 
@@ -1346,11 +1383,7 @@ mod tests {
         let dir = setup_test_workspace();
 
         // Test sensitive extensions
-        let sensitive_extensions = [
-            "server.pem",
-            "private.key",
-            "keystore.p12",
-        ];
+        let sensitive_extensions = ["server.pem", "private.key", "keystore.p12"];
 
         for file_name in sensitive_extensions {
             fs::write(dir.path().join(file_name), "key data").unwrap();

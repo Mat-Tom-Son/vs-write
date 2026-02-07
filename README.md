@@ -1,18 +1,24 @@
 # VS Write
 
-A folder-based writing environment with entity tracking and AI assistance.
+VS Write is for writers and researchers who want plain-file projects, strong structure, and an in-app AI assistant that can operate on the project safely.
+
+VS Write is a Tauri desktop app with a native Rust AI agent.
+
+This README is dev-forward: it is written for contributors who want to run, debug, and ship changes quickly.
 
 ![VS Write Welcome Screen](docs/images/welcome.png)
 
-## What is this?
+## Quick Start (Contributors)
 
-VS Write is a desktop editor for writers, researchers, and anyone working with structured documents. Your project is a folder. Sections are Markdown files. Entities (characters, concepts, claims) are YAML files. Everything is human-readable and version-control friendly.
+### Prerequisites
 
-The built-in AI agent understands your project structure and can help with research, summarization, and consistency checking.
+- Node.js 18+
+- npm 9+
+- Rust via [rustup](https://rustup.rs/)
 
-## Quick Start
+This repo includes `rust-toolchain.toml`, so `rustfmt` and `clippy` are auto-provisioned by rustup.
 
-**Prerequisites:** Node.js 18+ and Rust toolchain
+### Run the App
 
 ```bash
 git clone https://github.com/Mat-Tom-Son/vs-write.git
@@ -21,140 +27,194 @@ npm install
 npm run tauri:dev
 ```
 
-That's it. The app will open and you can create or open a project.
+### Configure LLM Access
 
-## Features
+In the app, open Settings and choose one provider:
 
-### Write in Sections
+- OpenAI
+- Claude (Anthropic)
+- OpenRouter
+- Ollama (local, no API key)
 
-Organize your work into sections (chapters, scenes, papers). Each section is a Markdown file with a rich text editor.
+## Platform Notes and Gotchas
 
-![Section Editor](docs/images/text.png)
+- First Rust command on a fresh machine may take longer while rustup downloads toolchain components.
+- Tauri builds require native system prerequisites by OS. If build fails early, check the official Tauri prerequisites for your platform: [v2.tauri.app/start/prerequisites](https://v2.tauri.app/start/prerequisites/).
+- `npm run dev` is web-only and intentionally limited; use `npm run tauri:dev` for full app behavior and agent runtime.
+- `npm run rust:clippy` currently reports warnings in the codebase; this is expected today and does not block runtime.
 
-- Multi-tab editing
-- Formatting toolbar (bold, italic, headings, lists)
-- Word count tracking
-- Drag-and-drop reordering
+## Command Reference
 
-### Plain Text Files
+| Command | Purpose |
+| --- | --- |
+| `npm run tauri:dev` | Full desktop dev loop |
+| `npm run dev` | Web-only UI loop (limited native features) |
+| `npm run build` | Web build |
+| `npm run tauri:build` | Desktop production build |
+| `npm run test` | Frontend tests (Vitest) |
+| `npm run lint` | ESLint |
+| `npm run rust:fmt` | Format Rust (`cargo fmt`) |
+| `npm run rust:test` | Rust tests |
+| `npm run rust:clippy` | Rust lints |
 
-Your content stays in standard formats you can read anywhere. Sections are Markdown with YAML frontmatter. Open them in any editor.
+## Architecture at a Glance
 
-![File Structure](docs/images/metadata.png)
+VS Write combines:
 
+- React + TypeScript frontend
+- Tauri (Rust) backend with IPC commands
+- Native Rust agent runtime (multi-provider LLM + tool calling)
+- File-first project model (Markdown + YAML as source of truth)
+- SQLite index/cache layer for fast lookups and chat history
+- Lua extension system
+
+```text
+React UI (src/)
+  -> Tauri invoke/event bridge
+Rust command layer (src-tauri/src/agent_commands.rs, src-tauri/src/lib.rs)
+  -> Agent core + tools + providers (src-tauri/src/agent/)
+  -> Filesystem + SQLite + extension/signature services
 ```
+
+### Core Code Map
+
+| Area | Start Here |
+| --- | --- |
+| App shell and layout | `src/App.tsx` |
+| Global state and project lifecycle | `src/lib/store.ts` |
+| App settings and provider config | `src/lib/app-settings.ts` |
+| Project orchestration (files + DB + dirty tracking) | `src/services/ProjectService.ts` |
+| File I/O layer | `src/services/FileService.ts` |
+| SQLite schema and queries | `src/services/DatabaseService.ts` |
+| Agent chat UI | `src/components/Sidebar/NativeAgentPanel.tsx` |
+| Tauri command registration | `src-tauri/src/lib.rs` |
+| Agent IPC and run orchestration | `src-tauri/src/agent_commands.rs` |
+| Agent loop | `src-tauri/src/agent/core.rs` |
+| LLM provider adapters | `src-tauri/src/agent/llm.rs` |
+| Built-in agent tools and path safety | `src-tauri/src/agent/tools.rs` |
+| Lua extension loading/execution | `src-tauri/src/agent/lua_extensions.rs`, `src-tauri/src/agent/lua_runtime.rs` |
+| Extension package/signature verification | `src-tauri/src/extensions.rs` |
+
+## Data Model and Storage
+
+Projects are file-first. SQLite is an index/cache and can be rebuilt from files.
+
+```text
 my-project/
-  project.yaml           # Project metadata
+  project.yaml
   entities/
-    character-abc12.yaml # Entity definitions
+    *.yaml
   sections/
-    001-chapter-1.md     # Markdown + frontmatter
-    002-chapter-2.md
+    *.md
+  .storyide/
+    index.db
 ```
 
-### Track Entities
+- Source of truth: files on disk
+- Indexed/cache layer: `index.db`
+- Chat conversations/messages: SQLite tables `chat_conversations` and `chat_messages`
+- `.storyide` is a legacy internal folder name kept for compatibility; it is not a product positioning statement
 
-Define characters, locations, concepts, rules, or any custom type. Tag text selections to link them to entities. The AI uses these connections for consistency checking.
+## Agent Runtime (Native Rust)
 
-![Entity Tagging](docs/images/entities.png)
+The agent stack is in `src-tauri/src/agent/`.
 
-- Six entity types (character, location, concept, item, rule, custom)
-- Inline tagging with visual highlights
-- Entity descriptions as "source of truth" for AI analysis
+The runtime uses a tool-calling loop: the LLM receives project/user context, decides when to call tools, consumes tool results, and iterates until a final response is produced.
 
-### AI Agent
+- Providers: OpenAI, Claude, OpenRouter, Ollama
+- Built-in tools: `read_file`, `write_file`, `append_file`, `delete_file`, `list_dir`, `glob`, `grep`, `run_shell`
+- Tool approval modes: `auto_approve`, `approve_dangerous`, `approve_writes`, `approve_all`, `dry_run`
+- Session/audit support and health checks are built-in
 
-Chat with an AI that understands your project. It can read your files, answer questions, and help with research.
+Key command endpoints:
 
-![AI Agent](docs/images/agent.png)
+- `run_native_agent`
+- `respond_tool_approval`
+- `cancel_agent_task`
+- `run_agent_health_check`
 
-- Native Rust agent (runs in-process, no separate server)
-- Tool calling: read/write files, search, run commands
-- Project context injected automatically
-- Supports OpenAI, Claude, Ollama, and OpenRouter
+## Extension System
 
-### Multiple LLM Providers
+The current in-app extension runtime is Lua-based and wired through the native Rust extension registry.
 
-Use cloud APIs or run models locally. Configure in Settings.
+Mental model: extensions are Lua scripts that register tools and lifecycle hooks; those hooks/tools execute inside the same native agent environment and interact through the same guarded APIs and permission model used by core features.
 
-![Settings](docs/images/settings.png)
+- Example Lua extensions: `examples/*-lua/`
+- Built-in marketplace content: `marketplace/extensions/`
+- Auto-load path at runtime: app data `extensions/` directory (see `src/services/NativeExtensionService.ts`)
 
-| Provider | Use Case |
-|----------|----------|
-| OpenAI | Cloud API, also works with OpenAI-compatible servers (LM Studio, etc.) |
-| Anthropic | Claude models via cloud API |
-| OpenRouter | Single API for multiple model providers |
-| Ollama | Run open-source models locally, fully offline |
+Packaging/signing helpers:
 
-### Extend with Lua
+- `scripts/generate-keypair.cjs`
+- `scripts/sign-extension.cjs`
+- `scripts/package-extensions.cjs`
 
-Add custom tools and hooks with Lua extensions. No compilation needed.
+## Testing and Quality
 
-![Extensions](docs/images/extensions.png)
+Run these before opening a PR:
 
-- Custom AI tools that appear in the agent
-- Lifecycle hooks (project open/close, section save, entity change)
-- Built-in marketplace with example extensions
-- Entity API for reading/writing project data
+```bash
+npm run test
+npm run rust:test
+npm run rust:fmt
+npm run rust:clippy
+```
 
-See [`examples/`](examples/) for extension templates.
+Optional local checks:
 
-## Tech Stack
+```bash
+npm run lint
+npx tsc --noEmit
+```
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | React 19, TypeScript, Vite 7, CodeMirror 6, Zustand, Tailwind |
-| Desktop | Tauri 2 (Rust) |
-| Database | SQLite (cache/index layer) |
-| AI | Native Rust agent with multi-provider LLM support |
+## Security Boundaries
+
+- Workspace path enforcement for agent tools
+- Sensitive file blocking and symlink checks in tool layer
+- Tool-risk-based approval workflow before execution
+- Extension signature verification and trusted publisher checks
+
+Details:
+
+- `SECURITY.md`
+- `docs/extension-signing.md`
+
+## Stable vs In Flux
+
+### Stable
+
+- File-first project structure (`project.yaml`, `entities/*.yaml`, `sections/*.md`)
+- Core project open/save flows
+- Native Rust agent chat loop with multi-provider support
+- Built-in tool execution and approval modes
+- Lua extension loading and execution paths
+
+### In Flux
+
+- UX polish and interaction details in sidebar/panels
+- Extension ecosystem docs and example consistency (legacy manifests still present)
+- Lint/clippy hygiene and codebase-wide cleanup
+- Packaging/distribution workflows beyond local/dev channels
+
+## Where Help Is Needed
+
+If you want to contribute quickly, high-leverage areas include:
+
+- Frontend reliability and UX polish in project/chat flows
+- Test coverage for app and service layers
+- Clippy/lint cleanup with behavior-preserving refactors
+- Extension developer experience and docs alignment
+- Security hardening and audit/reporting ergonomics
+
+Check the repository issue tracker for labeled onboarding tasks (for example `good first issue`) and then follow `CONTRIBUTING.md`.
 
 ## Documentation
 
-- [Contributing Guide](CONTRIBUTING.md) - How to set up development and submit PRs
-- [Extension Development](docs/extension-development.md) - Build custom extensions
-- [Security Policy](SECURITY.md) - Reporting vulnerabilities
-
-## Development
-
-```bash
-npm run dev          # Web-only (limited features)
-npm run tauri:dev    # Desktop app with full features
-npm run build        # Production web build
-npm run tauri:build  # Desktop installer (.exe, .app, .AppImage)
-npm run lint         # ESLint
-npm run test         # Vitest
-```
-
-For Rust:
-```bash
-cd src-tauri
-cargo test
-cargo clippy
-```
-
-## Project Status
-
-VS Write is functional and usable, but still in early development (v0.1.0). Expect rough edges.
-
-**Working well:**
-- Section editing and organization
-- Entity management and tagging
-- AI agent with tool calling
-- Lua extension system
-- Multi-provider LLM support
-
-**Planned:**
-- Export to PDF, EPUB, HTML
-- Online extension marketplace
-- Custom UI panels from extensions
-- Auto-update mechanism
-
-## Contributing
-
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting PRs.
-
-Good first issues are labeled in the issue tracker.
+- `CONTRIBUTING.md`
+- `docs/extension-development.md`
+- `docs/extension-signing.md`
+- `SECURITY.md`
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT. See `LICENSE`.

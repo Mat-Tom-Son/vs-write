@@ -1,11 +1,11 @@
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use zip::ZipArchive;
-use ed25519_dalek::{Signature, VerifyingKey, Verifier};
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use sha2::{Sha256, Digest};
 use tauri::{AppHandle, Manager};
+use zip::ZipArchive;
 
 use crate::agent::lua_extensions::ExtensionManifest;
 
@@ -36,13 +36,13 @@ fn validate_extension_id(id: &str) -> Result<(), String> {
     }
 
     // Check that all characters are safe (alphanumeric, hyphen, underscore)
-    let is_valid = id.chars().all(|c| {
-        c.is_ascii_alphanumeric() || c == '-' || c == '_'
-    });
+    let is_valid = id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
 
     if !is_valid {
         return Err(
-            "Extension ID can only contain letters, numbers, hyphens, and underscores".to_string()
+            "Extension ID can only contain letters, numbers, hyphens, and underscores".to_string(),
         );
     }
 
@@ -63,7 +63,10 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> io::Result<()> {
             fs::copy(&src_path, &dst_path)?;
         } else if file_type.is_symlink() {
             // Avoid copying symlinks to prevent unexpected filesystem behavior.
-            log::warn!("Skipping symlink in bundled extension: {}", src_path.display());
+            log::warn!(
+                "Skipping symlink in bundled extension: {}",
+                src_path.display()
+            );
         }
     }
     Ok(())
@@ -121,7 +124,10 @@ pub struct SignatureVerification {
 /// These are base64-encoded Ed25519 public keys (raw 32-byte keys)
 static TRUSTED_PUBLISHERS: &[(&str, &str)] = &[
     // VS Write official key - used to sign bundled extensions
-    ("vswrite-official", "Nqh5oHbH6TO6WrAV1r64m0Z8FWhQru7Ku75tDmMNqkA="),
+    (
+        "vswrite-official",
+        "Nqh5oHbH6TO6WrAV1r64m0Z8FWhQru7Ku75tDmMNqkA=",
+    ),
     // Add more trusted publishers here
 ];
 
@@ -157,10 +163,8 @@ fn verify_signature(
 
     // If publisher not in trusted list, try to get key from manifest
     // (for self-signed extensions)
-    let public_key_b64 = public_key_b64.or_else(|| {
-        manifest.get("publicKey")
-            .and_then(|v| v.as_str())
-    });
+    let public_key_b64 =
+        public_key_b64.or_else(|| manifest.get("publicKey").and_then(|v| v.as_str()));
 
     let public_key_b64 = match public_key_b64 {
         Some(key) => key,
@@ -177,7 +181,8 @@ fn verify_signature(
     };
 
     // Decode the public key
-    let public_key_bytes = BASE64.decode(public_key_b64)
+    let public_key_bytes = BASE64
+        .decode(public_key_b64)
         .map_err(|e| format!("Invalid public key encoding: {}", e))?;
 
     // Ed25519 public keys are 32 bytes
@@ -189,11 +194,12 @@ fn verify_signature(
         .map_err(|e| format!("Invalid public key: {}", e))?;
 
     // Decode the signature
-    let signature_bytes = BASE64.decode(signature_b64)
+    let signature_bytes = BASE64
+        .decode(signature_b64)
         .map_err(|e| format!("Invalid signature encoding: {}", e))?;
 
-    let signature = Signature::from_slice(&signature_bytes)
-        .map_err(|e| format!("Invalid signature: {}", e))?;
+    let signature =
+        Signature::from_slice(&signature_bytes).map_err(|e| format!("Invalid signature: {}", e))?;
 
     // Get the content that was signed
     let signable_content = get_signable_content(manifest);
@@ -213,7 +219,10 @@ fn verify_signature(
             status: if is_trusted {
                 format!("Verified - signed by trusted publisher '{}'", public_key_id)
             } else {
-                format!("Valid signature from untrusted publisher '{}'", public_key_id)
+                format!(
+                    "Valid signature from untrusted publisher '{}'",
+                    public_key_id
+                )
             },
             error: None,
         }),
@@ -245,29 +254,23 @@ pub fn verify_extension_signature(manifest_path: String) -> Result<SignatureVeri
     let public_key_id = manifest.get("publicKeyId").and_then(|v| v.as_str());
 
     match (signature, public_key_id) {
-        (Some(sig), Some(key_id)) => {
-            verify_signature(&manifest, sig, key_id)
-        }
-        (Some(_), None) => {
-            Ok(SignatureVerification {
-                is_signed: true,
-                is_valid: false,
-                publisher_id: None,
-                is_trusted: false,
-                status: "Signed but missing publicKeyId".to_string(),
-                error: Some("Extension has signature but no publicKeyId".to_string()),
-            })
-        }
-        _ => {
-            Ok(SignatureVerification {
-                is_signed: false,
-                is_valid: false,
-                publisher_id: None,
-                is_trusted: false,
-                status: "Not signed".to_string(),
-                error: None,
-            })
-        }
+        (Some(sig), Some(key_id)) => verify_signature(&manifest, sig, key_id),
+        (Some(_), None) => Ok(SignatureVerification {
+            is_signed: true,
+            is_valid: false,
+            publisher_id: None,
+            is_trusted: false,
+            status: "Signed but missing publicKeyId".to_string(),
+            error: Some("Extension has signature but no publicKeyId".to_string()),
+        }),
+        _ => Ok(SignatureVerification {
+            is_signed: false,
+            is_valid: false,
+            publisher_id: None,
+            is_trusted: false,
+            status: "Not signed".to_string(),
+            error: None,
+        }),
     }
 }
 
@@ -289,7 +292,10 @@ pub fn get_trusted_publishers() -> Vec<String> {
 /// skipped. If the bundled version differs, the installed copy is replaced.
 #[tauri::command]
 pub fn install_bundled_lua_extensions(app: AppHandle) -> Result<Vec<String>, String> {
-    let bundled_root = match bundled_extensions_roots(&app).into_iter().find(|p| p.exists()) {
+    let bundled_root = match bundled_extensions_roots(&app)
+        .into_iter()
+        .find(|p| p.exists())
+    {
         Some(path) => path,
         None => return Ok(Vec::new()),
     };
@@ -362,7 +368,8 @@ pub fn install_bundled_lua_extensions(app: AppHandle) -> Result<Vec<String>, Str
         if dest_dir.exists() {
             let existing_manifest_path = dest_dir.join("manifest.json");
             if let Ok(existing_content) = fs::read_to_string(&existing_manifest_path) {
-                if let Ok(existing_manifest) = serde_json::from_str::<ExtensionManifest>(&existing_content)
+                if let Ok(existing_manifest) =
+                    serde_json::from_str::<ExtensionManifest>(&existing_content)
                 {
                     if existing_manifest.version == manifest.version {
                         should_install = false;
@@ -423,14 +430,17 @@ pub fn extract_extension(
     vsext_path: String,
     extensions_dir: String,
 ) -> Result<ExtractResult, String> {
-    log::info!("Extracting extension from {} to {}", vsext_path, extensions_dir);
+    log::info!(
+        "Extracting extension from {} to {}",
+        vsext_path,
+        extensions_dir
+    );
 
     // Open the .vsext (ZIP) file
-    let file = File::open(&vsext_path)
-        .map_err(|e| format!("Failed to open .vsext file: {}", e))?;
+    let file = File::open(&vsext_path).map_err(|e| format!("Failed to open .vsext file: {}", e))?;
 
-    let mut archive = ZipArchive::new(file)
-        .map_err(|e| format!("Failed to read ZIP archive: {}", e))?;
+    let mut archive =
+        ZipArchive::new(file).map_err(|e| format!("Failed to read ZIP archive: {}", e))?;
 
     // Read manifest.json to get extension ID
     let extension_id = {
@@ -445,11 +455,13 @@ pub fn extract_extension(
             return Err("No manifest.json or extension.js found in .vsext file".to_string());
         };
 
-        let mut manifest_file = archive.by_name(manifest_name)
+        let mut manifest_file = archive
+            .by_name(manifest_name)
             .map_err(|e| format!("Failed to read {}: {}", manifest_name, e))?;
 
         let mut manifest_content = String::new();
-        manifest_file.read_to_string(&mut manifest_content)
+        manifest_file
+            .read_to_string(&mut manifest_content)
             .map_err(|e| format!("Failed to read manifest: {}", e))?;
 
         // Try parsing as JSON first (manifest.json)
@@ -494,7 +506,8 @@ pub fn extract_extension(
 
     // Extract all files
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i)
+        let mut file = archive
+            .by_index(i)
             .map_err(|e| format!("Failed to read file from archive: {}", e))?;
 
         let outpath = match file.enclosed_name() {
@@ -513,8 +526,8 @@ pub fn extract_extension(
                 }
             }
 
-            let mut outfile = File::create(&outpath)
-                .map_err(|e| format!("Failed to create file: {}", e))?;
+            let mut outfile =
+                File::create(&outpath).map_err(|e| format!("Failed to create file: {}", e))?;
 
             io::copy(&mut file, &mut outfile)
                 .map_err(|e| format!("Failed to write file: {}", e))?;
@@ -540,8 +553,7 @@ pub fn delete_extension(extension_path: String) -> Result<(), String> {
         return Err("Extension directory does not exist".to_string());
     }
 
-    fs::remove_dir_all(path)
-        .map_err(|e| format!("Failed to delete extension directory: {}", e))?;
+    fs::remove_dir_all(path).map_err(|e| format!("Failed to delete extension directory: {}", e))?;
 
     log::info!("Extension deleted successfully");
     Ok(())
@@ -552,11 +564,10 @@ pub fn delete_extension(extension_path: String) -> Result<(), String> {
 pub fn read_extension_info(vsext_path: String) -> Result<ExtensionInfo, String> {
     log::info!("Reading extension info from {}", vsext_path);
 
-    let file = File::open(&vsext_path)
-        .map_err(|e| format!("Failed to open .vsext file: {}", e))?;
+    let file = File::open(&vsext_path).map_err(|e| format!("Failed to open .vsext file: {}", e))?;
 
-    let mut archive = ZipArchive::new(file)
-        .map_err(|e| format!("Failed to read ZIP archive: {}", e))?;
+    let mut archive =
+        ZipArchive::new(file).map_err(|e| format!("Failed to read ZIP archive: {}", e))?;
 
     // Check which manifest file exists
     let file_names: Vec<String> = archive.file_names().map(|s| s.to_string()).collect();
@@ -569,11 +580,13 @@ pub fn read_extension_info(vsext_path: String) -> Result<ExtensionInfo, String> 
         return Err("No manifest.json or extension.js found in .vsext file".to_string());
     };
 
-    let mut manifest_file = archive.by_name(manifest_name)
+    let mut manifest_file = archive
+        .by_name(manifest_name)
         .map_err(|e| format!("Failed to read {}: {}", manifest_name, e))?;
 
     let mut manifest_content = String::new();
-    manifest_file.read_to_string(&mut manifest_content)
+    manifest_file
+        .read_to_string(&mut manifest_content)
         .map_err(|e| format!("Failed to read manifest: {}", e))?;
 
     // Try parsing as JSON first
